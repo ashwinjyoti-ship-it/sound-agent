@@ -478,30 +478,31 @@ function renderShowList(data) {
   var shows = data.shows || [];
   if (!shows.length) return '<div class="card-in-msg">No shows found.</div>';
 
-  var h = '<div><strong>Found ' + shows.length + ' show(s)</strong></div>';
-  h += '<div class="card-in-msg" style="overflow-x:auto">';
-  h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-  h += '<thead><tr style="border-bottom:2px solid var(--primary);background:var(--bg)">';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Date & Venue</th>';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Program</th>';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Call Time</th>';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Assigned Crew</th>';
-  h += '</tr></thead><tbody>';
+  var label = shows.length === 1 ? '1 show' : shows.length + ' shows';
+  var h = '<div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">' + label + '</div>';
 
   for (var k = 0; k < shows.length; k++) {
     var s = shows[k];
-    var isAlt = k % 2 === 1 ? 'background:rgba(107,119,192,0.03)' : '';
-    h += '<tr style="border-bottom:1px solid var(--border);' + isAlt + '">' +
-      '<td style="text-align:left;padding:8px"><strong>' + escapeHtml(s.event_date) + '</strong><br><span style="color:var(--muted);font-size:11px">' + escapeHtml(s.venue || 'TBD') + '</span></td>' +
-      '<td style="text-align:left;padding:8px">' + escapeHtml(s.program || '—') + '</td>' +
-      '<td style="text-align:left;padding:8px">' + escapeHtml(s.call_time || '—') + '</td>' +
-      '<td style="text-align:left;padding:8px">' + escapeHtml(s.crew || 'Not assigned') + '</td>' +
-      '</tr>';
+    var dateStr = s.event_date ? s.event_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, function(_, y, m, d) {
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return d + ' ' + months[parseInt(m, 10) - 1] + ' ' + y;
+    }) : '—';
+    var borderTop = k > 0 ? 'border-top:1px solid var(--border);margin-top:10px;padding-top:10px' : '';
+    h += '<div style="' + borderTop + '">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">';
+    h += '<span style="font-weight:700;font-size:14px">' + escapeHtml(s.program || '—') + '</span>';
+    h += '<span style="font-size:11px;font-weight:600;color:var(--primary);white-space:nowrap;margin-left:8px">' + escapeHtml(dateStr) + '</span>';
+    h += '</div>';
+    h += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + escapeHtml(s.venue || 'Venue TBD') + '</div>';
+    var metaRow = [];
+    if (s.call_time) metaRow.push('Call: <strong>' + escapeHtml(s.call_time) + '</strong>');
+    if (s.crew && s.crew !== 'no crew yet') metaRow.push('Crew: <strong>' + escapeHtml(s.crew) + '</strong>');
+    else metaRow.push('<span style="color:var(--muted)">No crew assigned</span>');
+    h += '<div style="font-size:13px">' + metaRow.join(' &nbsp;·&nbsp; ') + '</div>';
+    h += '</div>';
   }
 
-  h += '</tbody></table>';
-  h += '</div>';
-  return h;
+  return '<div class="card-in-msg">' + h + '</div>';
 }
 
 // ─── Helpers ───

@@ -6,13 +6,14 @@ const TOOLS = [
     type: 'function' as const,
     function: {
       name: 'query_shows',
-      description: 'Query shows/events from the NCPA schedule database by date range and optional venue filter',
+      description: 'Query shows/events from the NCPA schedule database by date range and optional filters',
       parameters: {
         type: 'object',
         properties: {
           from: { type: 'string', description: 'Start date YYYY-MM-DD (required)' },
           to: { type: 'string', description: 'End date YYYY-MM-DD (defaults to from if omitted)' },
           venue: { type: 'string', description: 'Optional venue filter: JBT, Tata, Experimental, Little Theatre, Godrej Dance, TT, etc.' },
+          program: { type: 'string', description: 'Optional show/program name to filter by (partial match, case-insensitive)' },
         },
         required: ['from'],
       },
@@ -212,11 +213,18 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     switch (name) {
       case 'query_shows': {
         const to = args.to || args.from;
-        return await orchestrator.getShows({
+        const result = await orchestrator.getShows({
           from: args.from,
           to: to,
           venue: args.venue,
         });
+        if (args.program && result?.data?.length) {
+          const needle = args.program.toLowerCase();
+          result.data = result.data.filter((s: any) =>
+            (s.program || '').toLowerCase().includes(needle)
+          );
+        }
+        return result;
       }
 
       case 'add_show': {
