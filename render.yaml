@@ -1,0 +1,17 @@
+services:
+  - type: web
+    name: sound-agent-api
+    runtime: node
+    buildCommand: npm install && npm run build
+    startCommand: npm start
+    plan: standard
+    rootDir: backend
+    envVars:
+      - key: NODE_ENV
+        value: production
+      - key: KIMI_API_KEY
+        sync: false  # Set manually in Render dashboard
+      - key: ORCHESTRATOR_TOKEN
+        sync: false  # Set manually in Render dashboard
+      - key: FRONTEND_URL
+        value: https://sound-agent.pages.dev

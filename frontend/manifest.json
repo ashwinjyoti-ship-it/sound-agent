@@ -1,0 +1,17 @@
+{
+  "name": "Sound Agent",
+  "short_name": "Sound Agent",
+  "start_url": "/",
+  "display": "standalone",
+  "background_color": "#eef0f8",
+  "theme_color": "#6B77C0",
+  "orientation": "portrait",
+  "icons": [
+    {
+      "src": "/icon.svg",
+      "sizes": "any",
+      "type": "image/svg+xml",
+      "purpose": "any maskable"
+    }
+  ]
+}
