@@ -214,7 +214,7 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     switch (name) {
       case 'query_shows': {
         const to = args.to || args.from;
-        const result = await orchestrator.getShows({ from: args.from, to, venue: args.venue });
+        const result = (await orchestrator.getShows({ from: args.from, to, venue: args.venue })) as any;
         const needle = args.program ? args.program.toLowerCase() : null;
         if (needle && result?.data?.length) {
           result.data = result.data.filter((s: any) =>
@@ -227,7 +227,7 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
           const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
           const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
           const fmt = (d: Date) => d.toISOString().slice(0, 10);
-          const wider = await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo), venue: args.venue });
+          const wider = (await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo), venue: args.venue })) as any;
           if (wider?.data?.length) {
             wider.data = wider.data.filter((s: any) =>
               (s.program || '').toLowerCase().includes(needle)
