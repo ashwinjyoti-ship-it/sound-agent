@@ -301,21 +301,33 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     const qtyMatch = item.match(/(\d+)/);
     const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
 
-    // Find best match in quote-builder DB
-    const matches = equipList.filter((eq: any) => {
+    // Find best match in quote-builder DB — score by word overlap
+    let bestMatch: any = null;
+    let bestScore = 0;
+
+    for (const eq of equipList) {
       const name = (eq.name || '').toLowerCase();
       const category = (eq.category || '').toLowerCase();
-      return words.some((word: string) =>
-        name.includes(word) || category.includes(word)
-      );
-    });
+      const nameWords = name.split(/\s+/);
+      const categoryWords = category.split(/\s+/);
 
-    if (matches.length === 0) {
+      let score = 0;
+      for (const word of words) {
+        if (name === word || nameWords.includes(word)) score += 3; // exact word match
+        else if (name.includes(word)) score += 2; // partial name match
+        if (categoryWords.includes(word)) score += 1; // category match
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = eq;
+      }
+    }
+
+    if (!bestMatch || bestScore < 2) {
       unmatched.push(item);
       continue;
     }
-
-    const bestMatch = matches[0];
     quoteItems.push({
       name: bestMatch.name,
       quantity: qty,
