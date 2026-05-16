@@ -99,6 +99,8 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
   };
   let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
+  let lastToolName: string | null = null;
+  let lastToolResult: any = null;
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetch(KIMI_API_URL, {
@@ -128,8 +130,19 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
       throw new Error('No message from Kimi');
     }
 
-    // No tool calls — return content
+    // No tool calls — return content, or format as structured JSON if applicable
     if (!message.tool_calls || message.tool_calls.length === 0) {
+      // If the last tool was query_shows, format as structured JSON
+      if (lastToolName === 'query_shows' && lastToolResult?.data && lastToolResult.data.length > 0) {
+        const shows = lastToolResult.data.map((s: any) => ({
+          event_date: s.event_date,
+          program: s.program,
+          venue: s.venue,
+          call_time: s.call_time,
+          crew: s.crew || s.foh_crew || s.stage_crew,
+        }));
+        return `\`\`\`json\n${JSON.stringify({ type: 'shows', shows })}\n\`\`\``;
+      }
       return message.content || 'Done.';
     }
 
@@ -147,6 +160,8 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
     // Execute each tool call
     for (const toolCall of message.tool_calls) {
       const result = await executeTool(toolCall, orchestrator);
+      lastToolName = toolCall.function?.name;
+      lastToolResult = result;
       currentMessages.push({
         role: 'tool',
         tool_call_id: toolCall.id,
