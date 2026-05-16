@@ -148,7 +148,7 @@ async function sendMessage() {
 
 // ─── Mascot ───
 function mascotSVG(cls) {
-  return '<img class="' + cls + '" src="/images/mascot.png" alt="Sound Agent" style="width:64px;height:auto;display:block;filter:drop-shadow(0 2px 6px rgba(30,32,34,0.18))">';
+  return '<img class="' + cls + '" src="/IMG_9799.png" alt="Sound Agent" style="width:64px;height:auto;display:block;filter:drop-shadow(0 2px 6px rgba(30,32,34,0.18))">';
 }
 
 // ─── Message UI ───

@@ -60,10 +60,10 @@
     .msg-user .msg-body{background:rgba(212,122,49,.07)}
 
     /* Mascot animations */
-    @keyframes idle-bob{0%,100%{transform:translateY(0px)}50%{transform:translateY(-4px)}}
-    @keyframes think-bounce{0%,100%{transform:translateY(0px) rotate(0deg)}25%{transform:translateY(-6px) rotate(-5deg)}75%{transform:translateY(-6px) rotate(5deg)}}
-    .mascot-idle{animation:idle-bob 2.8s ease-in-out infinite;transform-origin:bottom center}
-    .mascot-think{animation:think-bounce 0.55s ease-in-out infinite;transform-origin:bottom center}
+    @keyframes idle-bob{0%,100%{transform:translateY(0px) rotate(0deg) scale(1)}25%{transform:translateY(-3px) rotate(-1.5deg) scale(1.01)}50%{transform:translateY(-7px) rotate(0deg) scale(1.03)}75%{transform:translateY(-3px) rotate(1.5deg) scale(1.01)}}
+    @keyframes think-bounce{0%,100%{transform:translateY(0px) rotate(0deg) scale(1)}20%{transform:translateY(-8px) rotate(-6deg) scale(1.03)}40%{transform:translateY(-2px) rotate(4deg) scale(0.99)}60%{transform:translateY(-10px) rotate(6deg) scale(1.04)}80%{transform:translateY(-3px) rotate(-4deg) scale(1)}}
+    .mascot-idle{animation:idle-bob 1.9s ease-in-out infinite;transform-origin:bottom center;will-change:transform}
+    .mascot-think{animation:think-bounce 0.42s ease-in-out infinite;transform-origin:bottom center;will-change:transform}
 
     /* Cards inside messages */
     .card-in-msg{background:#fff;border:1px solid var(--border);border-radius:var(--radius-sm);padding:14px;margin-top:10px;max-width:100%;overflow-x:hidden}
