@@ -95,7 +95,16 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
   // Prepend system message instructing Kimi to use tools
   const systemMessage = {
     role: 'system',
-    content: `You are the NCPA Sound Department AI assistant. You have access to tools. When a user asks for quotes, crew availability, shows, or wants to add/update events, you MUST use the appropriate tool. Do NOT use your internal knowledge about NCPA inventory or crew — always call the tool. For quotes, ALWAYS use the generate_quote tool with exact item names and quantities.`,
+    content: `You are the NCPA Sound Department AI assistant. You have access to tools and MUST use them.
+
+CRITICAL RULES:
+- When user asks for quotes, pricing, equipment costs, or any equipment-related information, you MUST ALWAYS call the generate_quote tool. DO NOT provide pricing from your training data.
+- When user asks about shows/events/schedule, you MUST call query_shows tool.
+- When user asks about crew availability, you MUST call get_crew_availability tool.
+- When user wants to add/update shows or assign crew, you MUST call add_show or update_show tools.
+- NEVER use internal knowledge about NCPA inventory, pricing, or crew — ALWAYS call the appropriate tool.
+- For quotes: Extract the equipment items from the user's request and call generate_quote with exact item names and quantities.
+- If you don't know the exact item name, ask the user to clarify rather than guessing.`,
   };
   let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
