@@ -104,7 +104,13 @@ CRITICAL RULES:
 - When user wants to add/update shows or assign crew, you MUST call add_show or update_show tools.
 - NEVER use internal knowledge about NCPA inventory, pricing, or crew — ALWAYS call the appropriate tool.
 - For quotes: Extract the equipment items from the user's request and call generate_quote with exact item names and quantities.
-- If you don't know the exact item name, ask the user to clarify rather than guessing.`,
+- If you don't know the exact item name, ask the user to clarify rather than guessing.
+
+FORMATTING RULES:
+- Do NOT use markdown formatting (**, __, etc.) in your responses
+- Write plain, natural text for users
+- Use line breaks for readability, but no markdown symbols
+- Keep responses concise and friendly`,
   };
   let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
@@ -151,6 +157,17 @@ CRITICAL RULES:
           crew: s.crew || s.foh_crew || s.stage_crew,
         }));
         return `\`\`\`json\n${JSON.stringify({ type: 'shows', shows })}\n\`\`\``;
+      }
+      // If the last tool was get_crew_availability, format as structured JSON for crew picker
+      if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
+        return `\`\`\`json\n${JSON.stringify({
+          type: 'crew_availability',
+          date: lastToolResult.date,
+          available: lastToolResult.available,
+          assigned: lastToolResult.assigned,
+          unavailable: lastToolResult.unavailable,
+          conflicts: lastToolResult.conflicts
+        })}\n\`\`\``;
       }
       return message.content || 'Done.';
     }
@@ -319,7 +336,10 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
 
   for (const item of items) {
     const itemLower = item.toLowerCase();
-    const words = itemLower.split(/\s+/).filter((w: string) => w.length > 2);
+    // Split on whitespace AND dashes/hyphens to catch "M4-2" → ["m4", "2"]
+    const words = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 2);
+    // Also include shorter terms for model numbers like "M4", "C4", etc.
+    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0);
 
     // Extract quantity
     const qtyMatch = item.match(/(\d+)/);
@@ -332,14 +352,17 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     for (const eq of equipList) {
       const name = (eq.name || '').toLowerCase();
       const category = (eq.category || '').toLowerCase();
-      const nameWords = name.split(/\s+/);
-      const categoryWords = category.split(/\s+/);
+      const nameWords = name.split(/[\s\-]+/);
+      const categoryWords = category.split(/[\s\-]+/);
 
       let score = 0;
-      for (const word of words) {
-        if (name === word || nameWords.includes(word)) score += 3; // exact word match
-        else if (name.includes(word)) score += 2; // partial name match
-        if (categoryWords.includes(word)) score += 1; // category match
+      // Score each term from user input
+      for (const term of allTerms) {
+        // Exact word match in equipment name or category
+        if (nameWords.includes(term)) score += 3;
+        else if (categoryWords.includes(term)) score += 2;
+        // Partial match (e.g., "M4" in "M4 MONITORS")
+        else if (name.includes(term)) score += 2;
       }
 
       if (score > bestScore) {
