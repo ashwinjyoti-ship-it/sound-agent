@@ -128,11 +128,15 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
     }
 
     // Add assistant message with tool_calls
-    currentMessages.push({
+    const assistantMsg: any = {
       role: 'assistant',
       content: message.content || '',
       tool_calls: message.tool_calls,
-    });
+    };
+    if (message.reasoning_content) {
+      assistantMsg.reasoning_content = message.reasoning_content;
+    }
+    currentMessages.push(assistantMsg);
 
     // Execute each tool call
     for (const toolCall of message.tool_calls) {
