@@ -3,6 +3,7 @@
 
 const API_BASE = 'https://sound-agent-api.onrender.com';
 const chatEl = document.getElementById('chat');
+const pageEl = document.querySelector('.page');
 const micBtn = document.getElementById('mic-btn');
 const textInp = document.getElementById('text-inp');
 const sendBtn = document.getElementById('send-btn');
@@ -15,6 +16,7 @@ var copyStore = {};
 
 // ─── Init ───
 function init() {
+  syncViewportHeight();
   addMsg('assistant', 'Hey — SA here. What do you need?\n\nI can pull up the schedule, check who\'s free, add shows, or build an equipment quote. Just ask normally — no special commands needed.\n\n(Type /clear to wipe the slate.)');
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
@@ -58,6 +60,18 @@ function init() {
   } else {
     micBtn.style.display = 'none';
   }
+}
+
+function syncViewportHeight() {
+  const viewport = window.visualViewport;
+  const height = viewport ? viewport.height : window.innerHeight;
+  document.documentElement.style.setProperty('--app-height', height + 'px');
+}
+
+window.addEventListener('resize', syncViewportHeight);
+window.addEventListener('orientationchange', syncViewportHeight);
+if (window.visualViewport) {
+  window.visualViewport.addEventListener('resize', syncViewportHeight);
 }
 
 // ─── Recording ───
@@ -200,7 +214,9 @@ function removeLoading(id) {
 }
 
 function scrollToBottom() {
-  window.scrollTo(0, document.body.scrollHeight);
+  requestAnimationFrame(function() {
+    pageEl.scrollTop = pageEl.scrollHeight;
+  });
 }
 
 // ─── Structured Rendering ───

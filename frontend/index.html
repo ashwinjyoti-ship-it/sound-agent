@@ -33,14 +33,14 @@
       --safe-top:env(safe-area-inset-top,0px);
       --safe-bottom:env(safe-area-inset-bottom,0px);
     }
-    html{height:100%;-webkit-text-size-adjust:100%;overflow-x:hidden}
+    html{height:100%;-webkit-text-size-adjust:100%;overflow:hidden}
     body{
-      min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
+      height:var(--app-height,100dvh);min-height:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
       background:linear-gradient(155deg,#F5EDE0 0%,#FBF3E8 55%,#F0E4D0 100%);
-      color:var(--text);padding-bottom:calc(32px + var(--safe-bottom));overflow-x:hidden;width:100%
+      color:var(--text);padding-bottom:0;overflow:hidden;width:100%;display:flex;flex-direction:column
     }
     .app-bar{
-      position:sticky;top:0;z-index:50;
+      position:relative;z-index:50;flex:0 0 auto;
       background:linear-gradient(135deg,#323639 0%,#1E2022 100%);
       border-bottom:3px solid var(--primary);
       padding:calc(14px + var(--safe-top)) 20px 16px;
@@ -49,7 +49,7 @@
     .app-bar h1{font-size:20px;font-weight:700;letter-spacing:-.2px}
     .app-bar p{font-size:12px;opacity:.60;margin-top:2px}
 
-    .page{max-width:640px;margin:0 auto;padding:16px max(16px, env(safe-area-inset-right, 0px)) 100px max(16px, env(safe-area-inset-left, 0px));overflow-x:hidden}
+    .page{width:100%;max-width:640px;margin:0 auto;flex:1 1 auto;min-height:0;padding:16px max(16px, env(safe-area-inset-right, 0px)) 16px max(16px, env(safe-area-inset-left, 0px));overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch}
 
     /* Chat messages */
     .msg{display:flex;gap:10px;margin-bottom:14px;animation:fadeIn .25s ease}
@@ -106,7 +106,7 @@
     .show-meta{font-size:12px;color:var(--muted);margin-top:1px}
 
     /* Input bar */
-    .input-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--surface);backdrop-filter:blur(18px);border-top:1px solid var(--border);padding:10px 14px calc(10px + var(--safe-bottom));display:flex;gap:8px;align-items:center;width:100%;box-sizing:border-box}
+    .input-bar{position:relative;z-index:100;flex:0 0 auto;background:var(--surface);backdrop-filter:blur(18px);border-top:1px solid var(--border);padding:10px 14px calc(10px + var(--safe-bottom));display:flex;gap:8px;align-items:center;width:100%;box-sizing:border-box}
     .mic-btn{width:40px;height:40px;border-radius:50%;border:none;background:var(--primary);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:opacity .2s}
     .mic-btn:active{opacity:.8}
     .mic-btn.recording{background:var(--danger);animation:pulse 1s infinite}
