@@ -120,11 +120,24 @@ async function sendMessage() {
 function addMsg(role, text) {
   const div = document.createElement('div');
   div.className = 'msg msg-' + role;
+  // Clean markdown formatting and escape HTML
+  const cleanText = stripMarkdown(text);
   div.innerHTML = '<div class="msg-avatar">' + (role === 'user' ? 'You' : 'SA') + '</div>' +
-    '<div class="msg-body">' + escapeHtml(text) + '</div>';
+    '<div class="msg-body">' + escapeHtml(cleanText) + '</div>';
   chatEl.appendChild(div);
   scrollToBottom();
   return div;
+}
+
+function stripMarkdown(text) {
+  if (!text) return '';
+  // Remove markdown bold/italic: **text** → text, __text__ → text, *text* → text, _text_ → text
+  return text
+    .replace(/\*\*(.*?)\*\*/g, '$1')  // **bold** → bold
+    .replace(/__(.*?)__/g, '$1')      // __bold__ → bold
+    .replace(/\*(.*?)\*/g, '$1')      // *italic* → italic
+    .replace(/_(.*?)_/g, '$1')        // _italic_ → italic
+    .replace(/~~(.*?)~~/g, '$1');     // ~~strike~~ → strike
 }
 
 function addLoading() {

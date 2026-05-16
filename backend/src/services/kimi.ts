@@ -104,7 +104,13 @@ CRITICAL RULES:
 - When user wants to add/update shows or assign crew, you MUST call add_show or update_show tools.
 - NEVER use internal knowledge about NCPA inventory, pricing, or crew — ALWAYS call the appropriate tool.
 - For quotes: Extract the equipment items from the user's request and call generate_quote with exact item names and quantities.
-- If you don't know the exact item name, ask the user to clarify rather than guessing.`,
+- If you don't know the exact item name, ask the user to clarify rather than guessing.
+
+FORMATTING RULES:
+- Do NOT use markdown formatting (**, __, etc.) in your responses
+- Write plain, natural text for users
+- Use line breaks for readability, but no markdown symbols
+- Keep responses concise and friendly`,
   };
   let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
