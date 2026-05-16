@@ -116,7 +116,7 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
       throw new Error(`Kimi API error: ${response.status} ${text}`);
     }
 
-    const data = await response.json();
+    const data = await response.json() as any;
     const message = data.choices?.[0]?.message;
 
     if (!message) {
@@ -216,10 +216,10 @@ async function getMergedCrewAvailability(date: string, orchestrator: Orchestrato
   ];
 
   // 1. Get all crew + availability from DB_CREW
-  const crewData = await orchestrator.getAllCrew();
+  const crewData = await orchestrator.getAllCrew() as any;
   const allCrew: any[] = crewData.data || [];
 
-  const availData = await orchestrator.getCrewAvailability(date);
+  const availData = await orchestrator.getCrewAvailability(date) as any;
   const unavailIds = new Set(
     (availData.data || [])
       .filter((c: any) => !c.available)
@@ -227,7 +227,7 @@ async function getMergedCrewAvailability(date: string, orchestrator: Orchestrato
   );
 
   // 2. Get events from DB_SOUND for this date
-  const showsData = await orchestrator.getShows({ from: date, to: date });
+  const showsData = await orchestrator.getShows({ from: date, to: date }) as any;
   const events: any[] = showsData.data || [];
 
   // 3. Parse assigned crew
@@ -276,7 +276,7 @@ async function getMergedCrewAvailability(date: string, orchestrator: Orchestrato
 }
 
 async function generateEquipmentQuote(items: string[], orchestrator: OrchestratorClient) {
-  const inventoryData = await orchestrator.getInventory();
+  const inventoryData = await orchestrator.getInventory() as any;
   const inventory: any[] = inventoryData.data || [];
 
   const results: any[] = [];
