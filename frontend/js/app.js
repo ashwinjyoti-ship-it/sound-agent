@@ -10,10 +10,11 @@ const sendBtn = document.getElementById('send-btn');
 let recognition = null;
 let isRecording = false;
 let messages = [];
+let voiceTimeout = null;
 
 // ─── Init ───
 function init() {
-  addMsg('assistant', '👋 Hey. I can help you:\n• Add or update shows\n• Check crew availability\n• Generate equipment quotes\n• Query the schedule\n\nTry: "Add show 31 May JBT quartet" or "Who is free on 17 May?"\n\nType /clear to start a fresh conversation.');
+  addMsg('assistant', 'Hey — SA here. What do you need?\n\nI can pull up the schedule, check who\'s free, add shows, or build an equipment quote. Just ask normally — no special commands needed.\n\n(Type /clear to wipe the slate.)');
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -23,6 +24,7 @@ function init() {
     recognition.lang = 'en-IN';
 
     recognition.onresult = function(e) {
+      clearTimeout(voiceTimeout);
       const transcript = e.results[0][0].transcript;
       textInp.value = transcript;
       stopRecording();
@@ -31,16 +33,27 @@ function init() {
       setTimeout(function() {
         textInp.classList.remove('recognized');
         sendMessage();
-      }, 500);
+      }, 400);
     };
 
     recognition.onerror = function(e) {
+      clearTimeout(voiceTimeout);
       stopRecording();
-      if (e.error !== 'no-speech') {
-        addMsg('assistant', '⚠ Mic error: ' + e.error);
-      }
+      var msg = {
+        'not-allowed':  'Mic access denied — check browser permissions.',
+        'no-speech':    null, // silent, user just didn't speak
+        'network':      'Voice recognition needs a network connection.',
+        'aborted':      null, // user cancelled, silent
+        'audio-capture':'No mic found. Plug one in?',
+        'service-not-allowed': 'Voice not allowed in this browser context (try non-PWA mode).',
+      }[e.error] || ('Mic hiccup: ' + e.error);
+      if (msg) addMsg('assistant', msg);
     };
-    recognition.onend = function() { stopRecording(); };
+
+    recognition.onend = function() {
+      clearTimeout(voiceTimeout);
+      stopRecording();
+    };
   } else {
     micBtn.style.display = 'none';
   }
@@ -56,7 +69,14 @@ function startRecording() {
   if (!recognition || isRecording) return;
   isRecording = true;
   micBtn.classList.add('recording');
-  try { recognition.start(); } catch(e) {}
+  try {
+    recognition.start();
+    voiceTimeout = setTimeout(function() {
+      stopRecording();
+    }, 10000); // auto-stop after 10 s
+  } catch(e) {
+    stopRecording();
+  }
 }
 
 function stopRecording() {
@@ -81,7 +101,7 @@ async function sendMessage() {
     chatEl.innerHTML = '';
     messages = [];
     textInp.value = '';
-    addMsg('assistant', '✓ Chat cleared. Starting fresh!');
+    addMsg('assistant', 'Cleared. Clean slate.');
     return;
   }
 
@@ -103,12 +123,12 @@ async function sendMessage() {
 
     if (!res.ok) {
       const err = await res.text();
-      addMsg('assistant', '⚠ Error: ' + err);
+      addMsg('assistant', 'Something went wrong on the server — ' + (err || 'unknown error') + '. Try again in a sec.');
       return;
     }
 
     const data = await res.json();
-    const reply = data.reply || 'No reply';
+    const reply = data.reply || 'Got nothing back. The server might be half-asleep.';
     messages.push({ role: 'assistant', content: reply });
 
     const structured = tryParseStructured(reply);
@@ -119,7 +139,7 @@ async function sendMessage() {
     }
   } catch (err) {
     removeLoading(loadingId);
-    addMsg('assistant', '⚠ Network error: ' + (err.message || err));
+    addMsg('assistant', 'Can\'t reach the server right now — check your connection. (' + (err.message || err) + ')');
   } finally {
     sendBtn.disabled = false;
   }
@@ -158,7 +178,7 @@ function addLoading() {
   div.id = id;
   div.className = 'msg msg-assistant';
   div.innerHTML = '<div class="msg-avatar">SA</div>' +
-    '<div class="msg-body"><div class="loading"><div class="spinner"></div>Thinking…</div></div>';
+    '<div class="msg-body"><div class="loading"><div class="spinner"></div>On it…</div></div>';
   chatEl.appendChild(div);
   scrollToBottom();
   return id;
