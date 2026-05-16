@@ -402,7 +402,6 @@ function renderQuote(data) {
   h += '</div>';
   return h;
 }
-}
 
 function renderShowList(data) {
   var shows = data.shows || [];
