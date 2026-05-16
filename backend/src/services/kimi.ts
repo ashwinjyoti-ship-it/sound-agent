@@ -158,6 +158,17 @@ FORMATTING RULES:
         }));
         return `\`\`\`json\n${JSON.stringify({ type: 'shows', shows })}\n\`\`\``;
       }
+      // If the last tool was get_crew_availability, format as structured JSON for crew picker
+      if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
+        return `\`\`\`json\n${JSON.stringify({
+          type: 'crew_availability',
+          date: lastToolResult.date,
+          available: lastToolResult.available,
+          assigned: lastToolResult.assigned,
+          unavailable: lastToolResult.unavailable,
+          conflicts: lastToolResult.conflicts
+        })}\n\`\`\``;
+      }
       return message.content || 'Done.';
     }
 

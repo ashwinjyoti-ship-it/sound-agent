@@ -131,13 +131,16 @@ function addMsg(role, text) {
 
 function stripMarkdown(text) {
   if (!text) return '';
-  // Remove markdown bold/italic: **text** → text, __text__ → text, *text* → text, _text_ → text
+  // Remove markdown formatting - handle double before single to avoid conflicts
   return text
-    .replace(/\*\*(.*?)\*\*/g, '$1')  // **bold** → bold
-    .replace(/__(.*?)__/g, '$1')      // __bold__ → bold
-    .replace(/\*(.*?)\*/g, '$1')      // *italic* → italic
-    .replace(/_(.*?)_/g, '$1')        // _italic_ → italic
-    .replace(/~~(.*?)~~/g, '$1');     // ~~strike~~ → strike
+    .replace(/\*\*(.*?)\*\*/g, '$1')    // **bold** → bold (double first)
+    .replace(/__(.*?)__/g, '$1')        // __bold__ → bold
+    .replace(/\*([^\*]+)\*/g, '$1')     // *italic* → italic (avoid ** matches)
+    .replace(/_([^_]+)_/g, '$1')        // _italic_ → italic (avoid __ matches)
+    .replace(/~~(.*?)~~/g, '$1')        // ~~strike~~ → strike
+    .replace(/`([^`]+)`/g, '$1')        // `code` → code
+    .replace(/\[(.*?)\]\((.*?)\)/g, '$1') // [link](url) → link
+    .trim();
 }
 
 function addLoading() {
