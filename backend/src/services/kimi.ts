@@ -75,14 +75,14 @@ const TOOLS = [
     type: 'function' as const,
     function: {
       name: 'generate_quote',
-      description: 'Generate an equipment quote by matching requested items against the NCPA inventory database.',
+      description: 'Generate an equipment hire quote with GST calculation. Use this when the user asks for a quote, pricing, or equipment cost. Pass item names and quantities exactly as requested.',
       parameters: {
         type: 'object',
         properties: {
           items: {
             type: 'array',
             items: { type: 'string' },
-            description: 'List of equipment requests, e.g., ["4 speakers", "6 wireless mics", "2 subwoofers"]',
+            description: 'List of equipment requests, e.g., ["4 SHURE SM58", "2 SHURE WIRELESS ULXD", "1 D&B M4 MONITORS"]',
           },
         },
         required: ['items'],
@@ -280,59 +280,82 @@ async function getMergedCrewAvailability(date: string, orchestrator: Orchestrato
 }
 
 async function generateEquipmentQuote(items: string[], orchestrator: OrchestratorClient) {
-  const inventoryData = await orchestrator.getInventory() as any;
-  const inventory: any[] = inventoryData.data || [];
+  // 1. Get quote-builder equipment list
+  const equipListData = await orchestrator.fetch('/api/quotes/equipment') as any;
+  const equipList: any[] = equipListData.data || [];
 
-  const results: any[] = [];
-  let subtotal = 0;
-  const GST_RATE = 0.18;
+  // 2. Parse and match each requested item
+  const quoteItems: any[] = [];
+  const unmatched: string[] = [];
 
   for (const item of items) {
     const itemLower = item.toLowerCase();
     const words = itemLower.split(/\s+/).filter((w: string) => w.length > 2);
 
-    // Try to extract quantity
+    // Extract quantity
     const qtyMatch = item.match(/(\d+)/);
-    const requestedQty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+    const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
 
-    // Find best matches
-    const matches = inventory.filter((eq: any) => {
+    // Find best match in quote-builder DB
+    const matches = equipList.filter((eq: any) => {
       const name = (eq.name || '').toLowerCase();
       const category = (eq.category || '').toLowerCase();
-      const desc = (eq.description || '').toLowerCase();
       return words.some((word: string) =>
-        name.includes(word) || category.includes(word) || desc.includes(word)
+        name.includes(word) || category.includes(word)
       );
     });
 
-    const bestMatch = matches[0];
-    const rate = bestMatch?.rental_price || bestMatch?.price || 0;
-    const lineTotal = rate * requestedQty;
-    subtotal += lineTotal;
+    if (matches.length === 0) {
+      unmatched.push(item);
+      continue;
+    }
 
-    results.push({
-      requested: item,
-      requestedQty,
-      matches: matches.slice(0, 5).map((m: any) => ({
-        name: m.name,
-        category: m.category,
-        description: m.description,
-        price: m.rental_price || m.price || null,
-        available: m.status === 'available',
-      })),
-      rate,
-      lineTotal,
+    const bestMatch = matches[0];
+    quoteItems.push({
+      name: bestMatch.name,
+      quantity: qty,
     });
   }
 
-  const gst = Math.round(subtotal * GST_RATE);
-  const total = subtotal + gst;
+  if (quoteItems.length === 0) {
+    return {
+      success: false,
+      error: 'No equipment matched from quote database',
+      unmatched,
+      available_equipment: equipList.slice(0, 10).map((e: any) => e.name),
+    };
+  }
 
+  // 3. Call quote-builder generate endpoint
+  const quoteData = await orchestrator.generateQuote({
+    client_name: 'NCPA Internal',
+    event_name: 'Sound Hire Quote',
+    items: quoteItems,
+    notes: '',
+  }) as any;
+
+  if (!quoteData.success) {
+    return {
+      success: false,
+      error: quoteData.error || 'Quote generation failed',
+      unmatched,
+    };
+  }
+
+  // 4. Return formatted data for frontend
+  const data = quoteData.data;
   return {
     success: true,
-    items: results,
-    subtotal,
-    gst,
-    total,
+    quote_number: data.quote_number,
+    date: data.date,
+    client_name: data.client_name,
+    event_name: data.event_name,
+    items: data.items,
+    subtotal: data.subtotal,
+    gst: data.gst,
+    total: data.total,
+    formatted_total: data.formatted_total,
+    plain_text: data.plain_text,
+    unmatched: unmatched.length ? unmatched : undefined,
   };
 }
