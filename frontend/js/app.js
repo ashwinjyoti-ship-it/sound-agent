@@ -148,7 +148,7 @@ async function sendMessage() {
 
 // ─── Mascot ───
 function mascotSVG(cls) {
-  const mascotSrc = '/IMG_9799.png';
+  const mascotSrc = '/images/mascot.png';
   const mascotStyle = 'width:64px;height:auto;display:block;filter:none';
   return '<img class="' + cls + '" src="' + mascotSrc + '" alt="Sound Agent" style="' + mascotStyle + '">';
 }
