@@ -107,6 +107,7 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
         messages: currentMessages,
         tools: TOOLS,
         tool_choice: 'auto',
+        thinking: { type: 'disabled' },
       }),
     });
 
