@@ -49,10 +49,12 @@ const TOOLS = [
         type: 'object',
         properties: {
           id: { type: 'number', description: 'Show ID number' },
+          event_date: { type: 'string', description: 'Date of the show YYYY-MM-DD — required so existing data can be checked before overwriting' },
           sound_requirements: { type: 'string', description: 'Sound requirements text to set or update' },
           call_time: { type: 'string', description: 'Call time like 17:00 or 5:30pm' },
           foh_crew: { type: 'string', description: 'FOH engineer name' },
           stage_crew: { type: 'string', description: 'Comma-separated stage crew names' },
+          confirmed: { type: 'boolean', description: 'Set to true only after the user has confirmed overwriting existing data' },
         },
         required: ['id'],
       },
@@ -109,11 +111,7 @@ TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
 - Add a show → add_show
-- Update a show (sound requirements, call time, crew) → call query_shows with the date and program name. Do NOT ask for venue first — just search. Then:
-  (a) If the field being updated already has data, reply with what's currently there and ask the user to confirm before overwriting. Example: "Sound requirements already set to 'HH x2, SM58 x4' — replace with 'HHx2'?"
-  (b) If the field is empty, update immediately and confirm what was set.
-  (c) Only call update_show after the user confirms, or if the field was empty.
-  (d) Only ask for clarification if two or more shows share the same name on that date.
+- Update a show (sound requirements, call time, crew) → call query_shows with the date and program name. Do NOT ask for venue first — just search. Always pass event_date when calling update_show. If update_show returns requires_confirmation: true, show the user the existing values from the response and ask them to confirm before calling update_show again with confirmed: true.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Unsure of an equipment name? Ask, don't guess.
 
@@ -240,6 +238,12 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     return { error: 'Invalid arguments JSON' };
   }
 
+  function matchesProgram(program: string, needle: string): boolean {
+    const hay = (program || '').toLowerCase();
+    const words = needle.split(/\s+/).filter(w => w.length >= 3);
+    return words.length > 0 && words.some(w => hay.includes(w));
+  }
+
   try {
     switch (name) {
       case 'query_shows': {
@@ -248,7 +252,7 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
         const needle = args.program ? args.program.toLowerCase() : null;
         if (needle && result?.data?.length) {
           result.data = result.data.filter((s: any) =>
-            (s.program || '').toLowerCase().includes(needle)
+            matchesProgram(s.program, needle)
           );
         }
         // If named show not found on requested date, search ±7 days
@@ -260,7 +264,7 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
           const wider = (await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo), venue: args.venue })) as any;
           if (wider?.data?.length) {
             wider.data = wider.data.filter((s: any) =>
-              (s.program || '').toLowerCase().includes(needle)
+              matchesProgram(s.program, needle)
             );
           }
           if (wider?.data?.length) {
@@ -287,6 +291,27 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
       }
 
       case 'update_show': {
+        // If not yet confirmed, fetch current show and check for existing data
+        if (!args.confirmed && args.event_date) {
+          const current = (await orchestrator.getShows({ from: args.event_date, to: args.event_date })) as any;
+          const show = (current?.data || []).find((s: any) => s.id === args.id);
+          if (show) {
+            const conflicts: Record<string, string> = {};
+            if (args.sound_requirements !== undefined && show.sound_requirements) conflicts.sound_requirements = show.sound_requirements;
+            if (args.call_time !== undefined && show.call_time) conflicts.call_time = show.call_time;
+            if (args.foh_crew !== undefined && show.foh_crew) conflicts.foh_crew = show.foh_crew;
+            if (args.stage_crew !== undefined && show.stage_crew) conflicts.stage_crew = show.stage_crew;
+            if (Object.keys(conflicts).length > 0) {
+              return {
+                requires_confirmation: true,
+                show_id: args.id,
+                show_name: show.program,
+                existing: conflicts,
+                message: 'Fields already have data — confirm before overwriting',
+              };
+            }
+          }
+        }
         const patch: any = {};
         if (args.sound_requirements !== undefined) patch.sound_requirements = args.sound_requirements;
         if (args.call_time !== undefined) patch.call_time = args.call_time;
@@ -392,7 +417,7 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     // Split on whitespace AND dashes/hyphens to catch "M4-2" → ["m4", "2"]
     const words = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 2);
     // Also include shorter terms for model numbers like "M4", "C4", etc.
-    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0);
+    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0 && !/^\d+$/.test(w));
 
     // Extract quantity
     const qtyMatch = item.match(/(\d+)/);
@@ -424,7 +449,7 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
       }
     }
 
-    if (!bestMatch || bestScore < 2) {
+    if (!bestMatch || bestScore < 3) {
       unmatched.push(item);
       continue;
     }

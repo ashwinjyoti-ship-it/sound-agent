@@ -358,30 +358,24 @@ function renderQuote(data) {
   var gst = data.gst || 0;
   var total = data.total || 0;
 
-  // Items table
-  h += '<table class="quote-table" style="margin-bottom:16px;width:100%;border-collapse:collapse">';
-  h += '<thead><tr style="background:var(--primary);color:#fff">';
-  h += '<th style="text-align:left;padding:10px;font-size:12px;font-weight:700">Item</th>';
-  h += '<th style="text-align:center;padding:10px;font-size:12px;font-weight:700">Qty</th>';
-  h += '<th style="text-align:right;padding:10px;font-size:12px;font-weight:700">Rate</th>';
-  h += '<th style="text-align:right;padding:10px;font-size:12px;font-weight:700">Amount</th>';
-  h += '</tr></thead><tbody>';
-
+  // Items stacked layout
   for (var i = 0; i < data.items.length; i++) {
     var item = data.items[i];
     var match = item.matches ? item.matches[0] : null;
     var rate = item.rate || 0;
     var lineTotal = item.lineTotal || 0;
     var itemName = match ? match.name : item.requested;
-    var bgColor = i % 2 === 0 ? '' : 'background:rgba(107,119,192,0.04)';
-    h += '<tr style="' + bgColor + '">';
-    h += '<td style="text-align:left;padding:10px;font-size:13px">' + escapeHtml(itemName) + '</td>';
-    h += '<td style="text-align:center;padding:10px;font-size:13px">' + (item.requestedQty || 1) + '</td>';
-    h += '<td style="text-align:right;padding:10px;font-size:13px">₹' + (rate ? rate.toLocaleString('en-IN') : '—') + '</td>';
-    h += '<td style="text-align:right;padding:10px;font-size:13px">₹' + (lineTotal ? lineTotal.toLocaleString('en-IN') : '—') + '</td>';
-    h += '</tr>';
+    var qty = item.requestedQty || 1;
+    var borderTop = i > 0 ? 'border-top:1px solid var(--border);' : '';
+    h += '<div style="' + borderTop + 'padding:10px 0;display:flex;justify-content:space-between;align-items:baseline;gap:8px">';
+    h += '<span style="font-size:13px;font-weight:600;flex:1">' + escapeHtml(itemName) + '</span>';
+    h += '<span style="font-size:13px;font-weight:700;white-space:nowrap">₹' + lineTotal.toLocaleString('en-IN') + '</span>';
+    h += '</div>';
+    h += '<div style="font-size:12px;color:var(--muted);margin-top:-6px;padding-bottom:4px">';
+    h += qty + ' × ₹' + rate.toLocaleString('en-IN');
+    h += '</div>';
   }
-  h += '</tbody></table>';
+  h += '<div style="margin-bottom:16px"></div>';
 
   // Totals
   h += '<div style="border-top:2px solid var(--primary);padding-top:12px;margin-bottom:16px">';
