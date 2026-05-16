@@ -328,16 +328,29 @@ function attachCrewListeners(data) {
 }
 
 function renderQuote(data) {
-  var h = '<div class="card-in-msg">';
-
   if (!data.items || !data.items.length) {
-    h += '<div>No items matched.</div>';
-    return h + '</div>';
+    return '<div class="card-in-msg"><div>No items matched.</div></div>';
   }
 
-  // Simple clean table
-  h += '<table class="quote-table" style="margin-bottom:12px">';
-  h += '<thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>';
+  var h = '<div class="card-in-msg">';
+  var subtotal = data.subtotal || 0;
+  var gst = data.gst || 0;
+  var total = data.total || 0;
+
+  // Header
+  h += '<div style="margin-bottom:16px;border-bottom:2px solid var(--primary);padding-bottom:12px">';
+  h += '<div style="font-weight:700;font-size:16px">Equipment Hire Quote</div>';
+  h += '<div style="font-size:13px;color:var(--muted);margin-top:4px">Date: ' + (new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })) + '</div>';
+  h += '</div>';
+
+  // Items table
+  h += '<table class="quote-table" style="margin-bottom:16px;width:100%">';
+  h += '<thead><tr style="background:var(--primary);color:#fff">';
+  h += '<th style="text-align:left;padding:10px;font-size:12px;font-weight:700">Item</th>';
+  h += '<th style="text-align:center;padding:10px;font-size:12px;font-weight:700">Qty</th>';
+  h += '<th style="text-align:right;padding:10px;font-size:12px;font-weight:700">Rate</th>';
+  h += '<th style="text-align:right;padding:10px;font-size:12px;font-weight:700">Amount</th>';
+  h += '</tr></thead><tbody>';
 
   for (var i = 0; i < data.items.length; i++) {
     var item = data.items[i];
@@ -345,38 +358,36 @@ function renderQuote(data) {
     var rate = item.rate || 0;
     var lineTotal = item.lineTotal || 0;
     var itemName = match ? match.name : item.requested;
-    h += '<tr>' +
-      '<td>' + escapeHtml(itemName) + '</td>' +
-      '<td style="text-align:center">' + (item.requestedQty || 1) + '</td>' +
-      '<td style="text-align:right">' + (rate ? '₹' + rate.toLocaleString('en-IN') : '—') + '</td>' +
-      '<td style="text-align:right">' + (lineTotal ? '₹' + lineTotal.toLocaleString('en-IN') : '—') + '</td>' +
-      '</tr>';
+    var bgColor = i % 2 === 0 ? '' : 'background:rgba(107,119,192,0.04)';
+    h += '<tr style="' + bgColor + '">';
+    h += '<td style="text-align:left;padding:10px;font-size:13px">' + escapeHtml(itemName) + '</td>';
+    h += '<td style="text-align:center;padding:10px;font-size:13px">' + (item.requestedQty || 1) + '</td>';
+    h += '<td style="text-align:right;padding:10px;font-size:13px">₹' + (rate ? rate.toLocaleString('en-IN') : '—') + '</td>';
+    h += '<td style="text-align:right;padding:10px;font-size:13px">₹' + (lineTotal ? lineTotal.toLocaleString('en-IN') : '—') + '</td>';
+    h += '</tr>';
   }
-
-  var subtotal = data.subtotal || 0;
-  var gst = data.gst || 0;
-  var total = data.total || 0;
-
-  h += '<tr style="border-top:2px solid var(--primary-light);font-weight:600">' +
-    '<td colspan="3" style="text-align:right;padding-right:8px">Subtotal</td>' +
-    '<td style="text-align:right">₹' + subtotal.toLocaleString('en-IN') + '</td></tr>';
-  h += '<tr style="font-weight:600">' +
-    '<td colspan="3" style="text-align:right;padding-right:8px">GST (18%)</td>' +
-    '<td style="text-align:right">₹' + gst.toLocaleString('en-IN') + '</td></tr>';
-  h += '<tr style="font-weight:700;background:var(--primary);color:#fff">' +
-    '<td colspan="3" style="text-align:right;padding-right:8px">TOTAL</td>' +
-    '<td style="text-align:right">₹' + total.toLocaleString('en-IN') + '</td></tr>';
-
   h += '</tbody></table>';
 
-  // Generate clean copy text for email
+  // Totals
+  h += '<div style="border-top:2px solid var(--primary);padding-top:12px;margin-bottom:16px">';
+  h += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:8px">';
+  h += '<span>Subtotal:</span><span style="font-weight:600">₹' + subtotal.toLocaleString('en-IN') + '</span>';
+  h += '</div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:13px;margin-bottom:12px">';
+  h += '<span>GST @ 18%:</span><span style="font-weight:600">₹' + gst.toLocaleString('en-IN') + '</span>';
+  h += '</div>';
+  h += '<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary)">';
+  h += '<span>TOTAL:</span><span>₹' + total.toLocaleString('en-IN') + '</span>';
+  h += '</div>';
+  h += '</div>';
+
+  // Copy text
   var today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   var lines = [
     'EQUIPMENT HIRE QUOTE',
     'Date: ' + today,
     '',
-    'ITEM | QTY | RATE | AMOUNT',
-    '─'.repeat(70)
+    'Item | Qty | Rate | Amount'
   ];
 
   for (var j = 0; j < data.items.length; j++) {
@@ -389,16 +400,15 @@ function renderQuote(data) {
     lines.push(name + ' | ' + qty + ' | ₹' + rate + ' | ₹' + amt);
   }
 
-  lines.push('─'.repeat(70));
+  lines.push('');
   lines.push('Subtotal: ₹' + subtotal);
   lines.push('GST (18%): ₹' + gst);
   lines.push('TOTAL: ₹' + total);
-  lines.push('');
-  lines.push('All amounts in INR. GST @ 18% included.');
 
   var copyText = lines.join('\n');
-  h += '<button class="copy-btn" style="width:100%;padding:10px;font-size:14px;margin-top:8px" onclick="navigator.clipboard.writeText(' + JSON.stringify(copyText) + ');this.textContent=\'✓ Copied!\';this.style.opacity=\'0.6\';setTimeout(()=>{this.textContent=\'Copy to Clipboard\';this.style.opacity=\'1\'},1500)">Copy to Clipboard</button>';
+  var copyBtn = '<button class="copy-btn" style="width:100%;padding:12px 14px;font-size:14px;font-weight:600;margin-top:12px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer" onclick="navigator.clipboard.writeText(' + JSON.stringify(copyText) + ');var btn=this;btn.textContent=\'✓ Copied to Clipboard\';btn.style.background=\'var(--accent)\';setTimeout(function(){btn.textContent=\'Copy Quote\';btn.style.background=\'var(--primary)\'},2000)">Copy Quote</button>';
 
+  h += copyBtn;
   h += '</div>';
   return h;
 }
