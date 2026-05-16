@@ -337,14 +337,8 @@ function renderQuote(data) {
   var gst = data.gst || 0;
   var total = data.total || 0;
 
-  // Header
-  h += '<div style="margin-bottom:16px;border-bottom:2px solid var(--primary);padding-bottom:12px">';
-  h += '<div style="font-weight:700;font-size:16px">Equipment Hire Quote</div>';
-  h += '<div style="font-size:13px;color:var(--muted);margin-top:4px">Date: ' + (new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })) + '</div>';
-  h += '</div>';
-
   // Items table
-  h += '<table class="quote-table" style="margin-bottom:16px;width:100%">';
+  h += '<table class="quote-table" style="margin-bottom:16px;width:100%;border-collapse:collapse">';
   h += '<thead><tr style="background:var(--primary);color:#fff">';
   h += '<th style="text-align:left;padding:10px;font-size:12px;font-weight:700">Item</th>';
   h += '<th style="text-align:center;padding:10px;font-size:12px;font-weight:700">Qty</th>';
@@ -377,39 +371,107 @@ function renderQuote(data) {
   h += '<span>GST @ 18%:</span><span style="font-weight:600">₹' + gst.toLocaleString('en-IN') + '</span>';
   h += '</div>';
   h += '<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary)">';
-  h += '<span>TOTAL:</span><span>₹' + total.toLocaleString('en-IN') + '</span>';
+  h += '<span>Total (INR):</span><span>₹' + total.toLocaleString('en-IN') + '</span>';
   h += '</div>';
   h += '</div>';
 
-  // Copy text - simple format for email
-  var today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-  var lines = [
-    'Date: ' + today,
-    '',
-    'Item | Qty | Rate | Amount'
-  ];
-
+  // Build HTML for rich-text clipboard (renders as table in email)
+  var htmlRows = '';
   for (var j = 0; j < data.items.length; j++) {
     var it = data.items[j];
     var m = it.matches ? it.matches[0] : null;
     var name = m ? m.name : it.requested;
-    var qty = (it.requestedQty || 1);
-    var rate = (it.rate || 0);
-    var amt = (it.lineTotal || 0);
-    lines.push(name + ' | ' + qty + ' | ₹' + rate + ' | ₹' + amt);
+    var rowBg = j % 2 === 0 ? '#ffffff' : '#f5f5f5';
+    htmlRows += '<tr style="background:' + rowBg + '">' +
+      '<td style="padding:6px 10px;border:1px solid #ddd">' + escapeHtml(name) + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center">' + (it.requestedQty || 1) + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + (it.rate || 0).toLocaleString('en-IN') + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + (it.lineTotal || 0).toLocaleString('en-IN') + '</td>' +
+      '</tr>';
   }
+  var htmlClip = '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">' +
+    '<thead><tr style="background:#4a4a8a;color:#fff">' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:left">Item</th>' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:center">Qty</th>' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:right">Rate</th>' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:right">Amount</th>' +
+    '</tr></thead><tbody>' + htmlRows + '</tbody>' +
+    '<tfoot>' +
+    '<tr><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">Subtotal</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + subtotal.toLocaleString('en-IN') + '</td></tr>' +
+    '<tr><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">GST @ 18%</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + gst.toLocaleString('en-IN') + '</td></tr>' +
+    '<tr style="font-weight:bold"><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">Total (INR)</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + total.toLocaleString('en-IN') + '</td></tr>' +
+    '</tfoot></table>';
 
-  lines.push('');
-  lines.push('Subtotal: ₹' + subtotal);
-  lines.push('GST (18%): ₹' + gst);
-  lines.push('TOTAL: ₹' + total);
+  // Plain-text fallback (column-aligned)
+  var col1 = 32, col2 = 5, col3 = 8;
+  var plainLines = [
+    padEnd('Item', col1) + padEnd('Qty', col2) + padEnd('Rate', col3) + 'Amount',
+    repeat('-', col1 + col2 + col3 + 8)
+  ];
+  for (var k = 0; k < data.items.length; k++) {
+    var pit = data.items[k];
+    var pm = pit.matches ? pit.matches[0] : null;
+    var pname = pm ? pm.name : pit.requested;
+    plainLines.push(
+      padEnd(pname, col1) +
+      padEnd(String(pit.requestedQty || 1), col2) +
+      padEnd('₹' + (pit.rate || 0), col3) +
+      '₹' + (pit.lineTotal || 0)
+    );
+  }
+  plainLines.push(repeat('-', col1 + col2 + col3 + 8));
+  plainLines.push(padEnd('Subtotal', col1 + col2) + padEnd('', col3) + '₹' + subtotal);
+  plainLines.push(padEnd('GST @ 18%', col1 + col2) + padEnd('', col3) + '₹' + gst);
+  plainLines.push(padEnd('Total (INR)', col1 + col2) + padEnd('', col3) + '₹' + total);
+  var plainText = plainLines.join('\n');
 
-  var copyText = lines.join('\n');
-  var copyBtn = '<button class="copy-btn" style="width:100%;padding:12px 14px;font-size:14px;font-weight:600;margin-top:12px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer" onclick="navigator.clipboard.writeText(' + JSON.stringify(copyText) + ');var btn=this;btn.textContent=\'✓ Copied to Clipboard\';btn.style.background=\'var(--accent)\';setTimeout(function(){btn.textContent=\'Copy Quote\';btn.style.background=\'var(--primary)\'},2000)">Copy Quote</button>';
+  var copyBtn = '<button class="copy-btn" style="width:100%;padding:14px;font-size:15px;font-weight:700;margin-top:4px;background:var(--primary);color:#fff;border:none;border-radius:10px;cursor:pointer;letter-spacing:0.3px" ' +
+    'onclick="copyQuoteRichText(this,' + JSON.stringify(htmlClip) + ',' + JSON.stringify(plainText) + ')">&#128203; Copy Quote</button>';
 
   h += copyBtn;
   h += '</div>';
   return h;
+}
+
+function padEnd(str, len) {
+  str = String(str);
+  while (str.length < len) str += ' ';
+  return str;
+}
+
+function repeat(ch, n) {
+  var s = '';
+  for (var i = 0; i < n; i++) s += ch;
+  return s;
+}
+
+function copyQuoteRichText(btn, htmlClip, plainText) {
+  var finish = function(ok) {
+    btn.textContent = ok ? '✓ Copied!' : '✓ Copied (plain text)';
+    btn.style.background = 'var(--accent)';
+    setTimeout(function() {
+      btn.innerHTML = '&#128203; Copy Quote';
+      btn.style.background = 'var(--primary)';
+    }, 2500);
+  };
+
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      var htmlBlob = new Blob([htmlClip], { type: 'text/html' });
+      var textBlob = new Blob([plainText], { type: 'text/plain' });
+      navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })])
+        .then(function() { finish(true); })
+        .catch(function() {
+          navigator.clipboard.writeText(plainText).then(function() { finish(false); });
+        });
+    } catch(e) {
+      navigator.clipboard.writeText(plainText).then(function() { finish(false); });
+    }
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(plainText).then(function() { finish(false); });
+  } else {
+    finish(false);
+  }
 }
 
 function renderShowList(data) {
