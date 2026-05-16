@@ -373,17 +373,27 @@ function renderShowList(data) {
   if (!shows.length) return '<div class="card-in-msg">No shows found.</div>';
 
   var h = '<div><strong>Found ' + shows.length + ' show(s)</strong></div>';
-  h += '<div class="card-in-msg">';
+  h += '<div class="card-in-msg" style="overflow-x:auto">';
+  h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
+  h += '<thead><tr style="border-bottom:2px solid var(--primary);background:var(--bg)">';
+  h += '<th style="text-align:left;padding:8px;font-weight:700">Date & Venue</th>';
+  h += '<th style="text-align:left;padding:8px;font-weight:700">Program</th>';
+  h += '<th style="text-align:left;padding:8px;font-weight:700">Call Time</th>';
+  h += '<th style="text-align:left;padding:8px;font-weight:700">Assigned Crew</th>';
+  h += '</tr></thead><tbody>';
+
   for (var k = 0; k < shows.length; k++) {
     var s = shows[k];
-    h += '<div class="show-item">' +
-      '<div class="show-date">' + escapeHtml(s.event_date) + ' • ' + escapeHtml(s.venue || '') + '</div>' +
-      '<div class="show-name">' + escapeHtml(s.program) + '</div>' +
-      '<div class="show-meta">' +
-      (s.call_time ? 'Call: ' + escapeHtml(s.call_time) + ' • ' : '') +
-      (s.crew ? 'Crew: ' + escapeHtml(s.crew) : 'No crew assigned') +
-      '</div></div>';
+    var isAlt = k % 2 === 1 ? 'background:rgba(107,119,192,0.03)' : '';
+    h += '<tr style="border-bottom:1px solid var(--border);' + isAlt + '">' +
+      '<td style="text-align:left;padding:8px"><strong>' + escapeHtml(s.event_date) + '</strong><br><span style="color:var(--muted);font-size:11px">' + escapeHtml(s.venue || 'TBD') + '</span></td>' +
+      '<td style="text-align:left;padding:8px">' + escapeHtml(s.program || '—') + '</td>' +
+      '<td style="text-align:left;padding:8px">' + escapeHtml(s.call_time || '—') + '</td>' +
+      '<td style="text-align:left;padding:8px">' + escapeHtml(s.crew || 'Not assigned') + '</td>' +
+      '</tr>';
   }
+
+  h += '</tbody></table>';
   h += '</div>';
   return h;
 }
