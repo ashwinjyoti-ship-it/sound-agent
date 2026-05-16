@@ -11,6 +11,7 @@ let recognition = null;
 let isRecording = false;
 let messages = [];
 let voiceTimeout = null;
+var copyStore = {};
 
 // ─── Init ───
 function init() {
@@ -445,8 +446,10 @@ function renderQuote(data) {
   plainLines.push(padEnd('Total (INR)', col1 + col2) + padEnd('', col3) + '₹' + total);
   var plainText = plainLines.join('\n');
 
+  var copyId = 'q-' + Date.now();
+  copyStore[copyId] = { html: htmlClip, text: plainText };
   var copyBtn = '<button class="copy-btn" style="width:100%;padding:14px;font-size:15px;font-weight:700;margin-top:4px;background:var(--primary);color:#fff;border:none;border-radius:10px;cursor:pointer;letter-spacing:0.3px" ' +
-    'onclick="copyQuoteRichText(this,' + JSON.stringify(htmlClip) + ',' + JSON.stringify(plainText) + ')">&#128203; Copy Quote</button>';
+    'onclick="copyQuoteRichText(this,\'' + copyId + '\')">&#128203; Copy Quote</button>';
 
   h += copyBtn;
   h += '</div>';
@@ -465,7 +468,10 @@ function repeat(ch, n) {
   return s;
 }
 
-function copyQuoteRichText(btn, htmlClip, plainText) {
+function copyQuoteRichText(btn, copyId) {
+  var stored = copyStore[copyId] || {};
+  var htmlClip = stored.html || '';
+  var plainText = stored.text || '';
   var finish = function(ok) {
     btn.textContent = ok ? '✓ Copied!' : '✓ Copied (plain text)';
     btn.style.background = 'var(--accent)';

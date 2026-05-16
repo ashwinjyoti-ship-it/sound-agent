@@ -109,7 +109,11 @@ TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
 - Add a show → add_show
-- Update a show (sound requirements, call time, crew) → call query_shows with the date and program name the user gave. Do NOT ask for venue or any other info first — just search. If exactly one show matches, use its id immediately. Only ask for clarification if two or more shows with the same name exist on that date.
+- Update a show (sound requirements, call time, crew) → call query_shows with the date and program name. Do NOT ask for venue first — just search. Then:
+  (a) If the field being updated already has data, reply with what's currently there and ask the user to confirm before overwriting. Example: "Sound requirements already set to 'HH x2, SM58 x4' — replace with 'HHx2'?"
+  (b) If the field is empty, update immediately and confirm what was set.
+  (c) Only call update_show after the user confirms, or if the field was empty.
+  (d) Only ask for clarification if two or more shows share the same name on that date.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Unsure of an equipment name? Ask, don't guess.
 
