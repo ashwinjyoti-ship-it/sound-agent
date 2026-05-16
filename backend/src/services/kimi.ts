@@ -107,6 +107,14 @@ CRITICAL RULES:
 - For quotes: Extract the equipment items from the user's request and call generate_quote with exact item names and quantities.
 - If you don't know the exact item name, ask the user to clarify rather than guessing.
 
+SHOW QUERY RESPONSE RULES:
+- If the user asks for ONE piece of info (e.g. only crew, only call time, only sound requirements), answer conversationally in plain text. Example: "Crew for Page to Stage on 28 May is Nikhil."
+- If the user asks for TWO OR MORE details, OR asks for a show overview/full details, output ONLY this JSON block (no other text):
+\`\`\`json
+{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","crew":"..."}]}
+\`\`\`
+- If the tool returns a nearbySearch flag, mention the actual date found (e.g. "No Page to Stage on 26 May, but found one on 28 May — crew is Nikhil.").
+
 FORMATTING RULES:
 - Do NOT use markdown formatting (**, __, etc.) in your responses
 - Write plain, natural text for users
@@ -146,19 +154,8 @@ FORMATTING RULES:
       throw new Error('No message from Kimi');
     }
 
-    // No tool calls — return content, or format as structured JSON if applicable
+    // No tool calls — return Kimi's natural response (or crew picker JSON)
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      // If the last tool was query_shows, format as structured JSON
-      if (lastToolName === 'query_shows' && lastToolResult?.data && lastToolResult.data.length > 0) {
-        const shows = lastToolResult.data.map((s: any) => ({
-          event_date: s.event_date,
-          program: s.program,
-          venue: s.venue,
-          call_time: s.call_time,
-          crew: s.crew || s.foh_crew || s.stage_crew,
-        }));
-        return `\`\`\`json\n${JSON.stringify({ type: 'shows', shows })}\n\`\`\``;
-      }
       // If the last tool was get_crew_availability, format as structured JSON for crew picker
       if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
         return `\`\`\`json\n${JSON.stringify({
@@ -213,16 +210,30 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     switch (name) {
       case 'query_shows': {
         const to = args.to || args.from;
-        const result = await orchestrator.getShows({
-          from: args.from,
-          to: to,
-          venue: args.venue,
-        });
-        if (args.program && result?.data?.length) {
-          const needle = args.program.toLowerCase();
+        const result = await orchestrator.getShows({ from: args.from, to, venue: args.venue });
+        const needle = args.program ? args.program.toLowerCase() : null;
+        if (needle && result?.data?.length) {
           result.data = result.data.filter((s: any) =>
             (s.program || '').toLowerCase().includes(needle)
           );
+        }
+        // If named show not found on requested date, search ±7 days
+        if (needle && (!result?.data || result.data.length === 0)) {
+          const base = new Date(args.from);
+          const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
+          const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
+          const fmt = (d: Date) => d.toISOString().slice(0, 10);
+          const wider = await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo), venue: args.venue });
+          if (wider?.data?.length) {
+            wider.data = wider.data.filter((s: any) =>
+              (s.program || '').toLowerCase().includes(needle)
+            );
+          }
+          if (wider?.data?.length) {
+            wider.nearbySearch = true;
+            wider.requestedDate = args.from;
+            return wider;
+          }
         }
         return result;
       }
