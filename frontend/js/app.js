@@ -307,11 +307,24 @@ function renderCrewPicker(data) {
 function attachCrewListeners(data) {
   var date = data.date;
 
+  function syncStageVisibility(selectedFohValue) {
+    data.available.forEach(function(name) {
+      var stagePill = document.getElementById('stage-' + sid(name));
+      if (!stagePill) return;
+      var pill = stagePill.closest('.cpill');
+      if (!pill) return;
+      if (name === selectedFohValue) {
+        stagePill.checked = false;
+        pill.style.display = 'none';
+      } else {
+        pill.style.display = '';
+      }
+    });
+  }
+
   document.querySelectorAll('input[name="foh"]').forEach(function(el) {
     el.addEventListener('change', function() {
-      if (!el.value) return;
-      var stageCb = document.getElementById('stage-' + sid(el.value));
-      if (stageCb) stageCb.checked = false;
+      syncStageVisibility(el.value); // empty string when None/TBD
     });
   });
 
@@ -322,6 +335,7 @@ function attachCrewListeners(data) {
       if (fohRadio && fohRadio.value === el.value) {
         var noneRadio = document.getElementById('foh-none');
         if (noneRadio) noneRadio.checked = true;
+        syncStageVisibility('');
       }
     });
   });
