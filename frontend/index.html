@@ -33,11 +33,11 @@
       --safe-top:env(safe-area-inset-top,0px);
       --safe-bottom:env(safe-area-inset-bottom,0px);
     }
-    html{height:100%;-webkit-text-size-adjust:100%}
+    html{height:100%;-webkit-text-size-adjust:100%;overflow-x:hidden}
     body{
       min-height:100%;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
       background:linear-gradient(155deg,#e8eaf6 0%,#eef4eb 55%,#e8eaf6 100%);
-      color:var(--text);padding-bottom:calc(32px + var(--safe-bottom));
+      color:var(--text);padding-bottom:calc(32px + var(--safe-bottom));overflow-x:hidden;width:100%
     }
     .app-bar{
       position:sticky;top:0;z-index:50;
@@ -56,7 +56,7 @@
     .msg-avatar{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:14px;font-weight:700}
     .msg-user .msg-avatar{background:var(--primary-light);color:#fff}
     .msg-assistant .msg-avatar{background:var(--accent);color:#253a1f}
-    .msg-body{flex:1;background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:var(--shadow);white-space:pre-wrap}
+    .msg-body{flex:1;background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:var(--shadow);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;max-width:100%}
     .msg-user .msg-body{background:rgba(107,119,192,.08)}
 
     /* Cards inside messages */
@@ -87,8 +87,8 @@
     .etag-b{background:rgba(140,140,155,.10);color:#777;border:1px solid rgba(140,140,155,.20)}
 
     /* Quote table */
-    .quote-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px}
-    .quote-table th,.quote-table td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border)}
+    .quote-table{width:100%;border-collapse:collapse;font-size:13px;margin-top:8px;table-layout:auto;max-width:100%}
+    .quote-table th,.quote-table td{padding:8px 10px;text-align:left;border-bottom:1px solid var(--border);word-break:break-word;overflow-wrap:break-word}
     .quote-table th{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.4px;color:var(--muted)}
     .quote-table tr:last-child td{border-bottom:none}
 
@@ -100,7 +100,7 @@
     .show-meta{font-size:12px;color:var(--muted);margin-top:1px}
 
     /* Input bar */
-    .input-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--surface);backdrop-filter:blur(18px);border-top:1px solid var(--border);padding:10px 14px calc(10px + var(--safe-bottom));display:flex;gap:8px;align-items:center}
+    .input-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--surface);backdrop-filter:blur(18px);border-top:1px solid var(--border);padding:10px 14px calc(10px + var(--safe-bottom));display:flex;gap:8px;align-items:center;width:100%;box-sizing:border-box}
     .mic-btn{width:40px;height:40px;border-radius:50%;border:none;background:var(--primary);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:opacity .2s}
     .mic-btn:active{opacity:.8}
     .mic-btn.recording{background:var(--danger);animation:pulse 1s infinite}
