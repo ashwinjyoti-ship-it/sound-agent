@@ -108,17 +108,31 @@ PERSONALITY:
 TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
-- Add or update a show → add_show / update_show
+- Add a show → add_show
+- Update a show (sound requirements, call time, crew) → call query_shows with the date and program name. Do NOT ask for venue first — just search. Then:
+  (a) If the field being updated already has data, reply with what's currently there and ask the user to confirm before overwriting. Example: "Sound requirements already set to 'HH x2, SM58 x4' — replace with 'HHx2'?"
+  (b) If the field is empty, update immediately and confirm what was set.
+  (c) Only call update_show after the user confirms, or if the field was empty.
+  (d) Only ask for clarification if two or more shows share the same name on that date.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Unsure of an equipment name? Ask, don't guess.
 
-SHOW RESPONSE FORMAT:
-- Single field asked (crew only, call time only, venue only, etc.) → plain conversational reply. Example: "Nikhil's on Page to Stage that evening."
-- Two or more fields asked, OR a general overview → output ONLY this JSON block, no other text:
+SHOW QUERY RULES:
+- When the user mentions a show name, ALWAYS pass it as the program parameter to query_shows.
+- If the show is not found on the exact date, immediately widen the search by passing from= 7 days before to= 7 days after — do NOT ask the user whether to search. Just search and report.
+- Single field asked (crew only, call time only, venue only) → plain conversational reply: "Nikhil's on Page to Stage that evening."
+- Two or more fields, or a general overview → output ONLY this JSON block, no other text:
 \`\`\`json
 {"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","crew":"..."}]}
 \`\`\`
-- If the tool result has nearbySearch: true, say the requested date had nothing and mention what was found. Example: "Nothing on 26 May for that show, but it's on 28 May — crew is Nikhil."
+- If nearbySearch is true in the tool result, say what date the show is actually on: "Nothing on 26 May — found it on 28 May, crew is Nikhil."
+
+QUOTE RULES:
+- After generate_quote succeeds, output ONLY this JSON block, nothing else:
+\`\`\`json
+{"type":"quote","items":[...],"subtotal":0,"gst":0,"total":0}
+\`\`\`
+- Do not summarise the quote in text. The card handles it.
 
 FORMATTING:
 - No markdown (**, __, ##, bullet dashes, etc.)
@@ -158,9 +172,25 @@ FORMATTING:
       throw new Error('No message from Kimi');
     }
 
-    // No tool calls — return Kimi's natural response (or crew picker JSON)
+    // No tool calls — return Kimi's natural response, or force structured JSON where needed
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      // If the last tool was get_crew_availability, format as structured JSON for crew picker
+      // Always force quote card — Kimi must not summarise a quote in text
+      if (lastToolName === 'generate_quote' && lastToolResult?.success) {
+        const normalizedItems = (lastToolResult.items || []).map((it: any) => ({
+          requested: it.name || it.requested || '',
+          requestedQty: it.quantity ?? it.requestedQty ?? 1,
+          rate: it.rate ?? it.unit_price ?? 0,
+          lineTotal: it.amount ?? it.lineTotal ?? it.total ?? 0,
+        }));
+        return `\`\`\`json\n${JSON.stringify({
+          type: 'quote',
+          items: normalizedItems,
+          subtotal: lastToolResult.subtotal,
+          gst: lastToolResult.gst,
+          total: lastToolResult.total,
+        })}\n\`\`\``;
+      }
+      // Always force crew picker card
       if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
         return `\`\`\`json\n${JSON.stringify({
           type: 'crew_availability',
