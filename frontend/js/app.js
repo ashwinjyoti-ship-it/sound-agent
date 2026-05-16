@@ -10,10 +10,11 @@ const sendBtn = document.getElementById('send-btn');
 let recognition = null;
 let isRecording = false;
 let messages = [];
+let voiceTimeout = null;
 
 // ─── Init ───
 function init() {
-  addMsg('assistant', '👋 Hey. I can help you:\n• Add or update shows\n• Check crew availability\n• Generate equipment quotes\n• Query the schedule\n\nTry: "Add show 31 May JBT quartet" or "Who is free on 17 May?"\n\nType /clear to start a fresh conversation.');
+  addMsg('assistant', 'Hey — SA here. What do you need?\n\nI can pull up the schedule, check who\'s free, add shows, or build an equipment quote. Just ask normally — no special commands needed.\n\n(Type /clear to wipe the slate.)');
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -23,6 +24,7 @@ function init() {
     recognition.lang = 'en-IN';
 
     recognition.onresult = function(e) {
+      clearTimeout(voiceTimeout);
       const transcript = e.results[0][0].transcript;
       textInp.value = transcript;
       stopRecording();
@@ -31,16 +33,27 @@ function init() {
       setTimeout(function() {
         textInp.classList.remove('recognized');
         sendMessage();
-      }, 500);
+      }, 400);
     };
 
     recognition.onerror = function(e) {
+      clearTimeout(voiceTimeout);
       stopRecording();
-      if (e.error !== 'no-speech') {
-        addMsg('assistant', '⚠ Mic error: ' + e.error);
-      }
+      var msg = {
+        'not-allowed':  'Mic access denied — check browser permissions.',
+        'no-speech':    null, // silent, user just didn't speak
+        'network':      'Voice recognition needs a network connection.',
+        'aborted':      null, // user cancelled, silent
+        'audio-capture':'No mic found. Plug one in?',
+        'service-not-allowed': 'Voice not allowed in this browser context (try non-PWA mode).',
+      }[e.error] || ('Mic hiccup: ' + e.error);
+      if (msg) addMsg('assistant', msg);
     };
-    recognition.onend = function() { stopRecording(); };
+
+    recognition.onend = function() {
+      clearTimeout(voiceTimeout);
+      stopRecording();
+    };
   } else {
     micBtn.style.display = 'none';
   }
@@ -56,7 +69,14 @@ function startRecording() {
   if (!recognition || isRecording) return;
   isRecording = true;
   micBtn.classList.add('recording');
-  try { recognition.start(); } catch(e) {}
+  try {
+    recognition.start();
+    voiceTimeout = setTimeout(function() {
+      stopRecording();
+    }, 10000); // auto-stop after 10 s
+  } catch(e) {
+    stopRecording();
+  }
 }
 
 function stopRecording() {
@@ -81,7 +101,7 @@ async function sendMessage() {
     chatEl.innerHTML = '';
     messages = [];
     textInp.value = '';
-    addMsg('assistant', '✓ Chat cleared. Starting fresh!');
+    addMsg('assistant', 'Cleared. Clean slate.');
     return;
   }
 
@@ -103,12 +123,12 @@ async function sendMessage() {
 
     if (!res.ok) {
       const err = await res.text();
-      addMsg('assistant', '⚠ Error: ' + err);
+      addMsg('assistant', 'Something went wrong on the server — ' + (err || 'unknown error') + '. Try again in a sec.');
       return;
     }
 
     const data = await res.json();
-    const reply = data.reply || 'No reply';
+    const reply = data.reply || 'Got nothing back. The server might be half-asleep.';
     messages.push({ role: 'assistant', content: reply });
 
     const structured = tryParseStructured(reply);
@@ -119,7 +139,7 @@ async function sendMessage() {
     }
   } catch (err) {
     removeLoading(loadingId);
-    addMsg('assistant', '⚠ Network error: ' + (err.message || err));
+    addMsg('assistant', 'Can\'t reach the server right now — check your connection. (' + (err.message || err) + ')');
   } finally {
     sendBtn.disabled = false;
   }
@@ -158,7 +178,7 @@ function addLoading() {
   div.id = id;
   div.className = 'msg msg-assistant';
   div.innerHTML = '<div class="msg-avatar">SA</div>' +
-    '<div class="msg-body"><div class="loading"><div class="spinner"></div>Thinking…</div></div>';
+    '<div class="msg-body"><div class="loading"><div class="spinner"></div>On it…</div></div>';
   chatEl.appendChild(div);
   scrollToBottom();
   return id;
@@ -337,14 +357,8 @@ function renderQuote(data) {
   var gst = data.gst || 0;
   var total = data.total || 0;
 
-  // Header
-  h += '<div style="margin-bottom:16px;border-bottom:2px solid var(--primary);padding-bottom:12px">';
-  h += '<div style="font-weight:700;font-size:16px">Equipment Hire Quote</div>';
-  h += '<div style="font-size:13px;color:var(--muted);margin-top:4px">Date: ' + (new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' })) + '</div>';
-  h += '</div>';
-
   // Items table
-  h += '<table class="quote-table" style="margin-bottom:16px;width:100%">';
+  h += '<table class="quote-table" style="margin-bottom:16px;width:100%;border-collapse:collapse">';
   h += '<thead><tr style="background:var(--primary);color:#fff">';
   h += '<th style="text-align:left;padding:10px;font-size:12px;font-weight:700">Item</th>';
   h += '<th style="text-align:center;padding:10px;font-size:12px;font-weight:700">Qty</th>';
@@ -377,69 +391,138 @@ function renderQuote(data) {
   h += '<span>GST @ 18%:</span><span style="font-weight:600">₹' + gst.toLocaleString('en-IN') + '</span>';
   h += '</div>';
   h += '<div style="display:flex;justify-content:space-between;font-size:14px;font-weight:700;color:var(--primary)">';
-  h += '<span>TOTAL:</span><span>₹' + total.toLocaleString('en-IN') + '</span>';
+  h += '<span>Total (INR):</span><span>₹' + total.toLocaleString('en-IN') + '</span>';
   h += '</div>';
   h += '</div>';
 
-  // Copy text - simple format for email
-  var today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-  var lines = [
-    'Date: ' + today,
-    '',
-    'Item | Qty | Rate | Amount'
-  ];
-
+  // Build HTML for rich-text clipboard (renders as table in email)
+  var htmlRows = '';
   for (var j = 0; j < data.items.length; j++) {
     var it = data.items[j];
     var m = it.matches ? it.matches[0] : null;
     var name = m ? m.name : it.requested;
-    var qty = (it.requestedQty || 1);
-    var rate = (it.rate || 0);
-    var amt = (it.lineTotal || 0);
-    lines.push(name + ' | ' + qty + ' | ₹' + rate + ' | ₹' + amt);
+    var rowBg = j % 2 === 0 ? '#ffffff' : '#f5f5f5';
+    htmlRows += '<tr style="background:' + rowBg + '">' +
+      '<td style="padding:6px 10px;border:1px solid #ddd">' + escapeHtml(name) + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center">' + (it.requestedQty || 1) + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + (it.rate || 0).toLocaleString('en-IN') + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + (it.lineTotal || 0).toLocaleString('en-IN') + '</td>' +
+      '</tr>';
   }
+  var htmlClip = '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">' +
+    '<thead><tr style="background:#4a4a8a;color:#fff">' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:left">Item</th>' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:center">Qty</th>' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:right">Rate</th>' +
+    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:right">Amount</th>' +
+    '</tr></thead><tbody>' + htmlRows + '</tbody>' +
+    '<tfoot>' +
+    '<tr><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">Subtotal</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + subtotal.toLocaleString('en-IN') + '</td></tr>' +
+    '<tr><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">GST @ 18%</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + gst.toLocaleString('en-IN') + '</td></tr>' +
+    '<tr style="font-weight:bold"><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">Total (INR)</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + total.toLocaleString('en-IN') + '</td></tr>' +
+    '</tfoot></table>';
 
-  lines.push('');
-  lines.push('Subtotal: ₹' + subtotal);
-  lines.push('GST (18%): ₹' + gst);
-  lines.push('TOTAL: ₹' + total);
+  // Plain-text fallback (column-aligned)
+  var col1 = 32, col2 = 5, col3 = 8;
+  var plainLines = [
+    padEnd('Item', col1) + padEnd('Qty', col2) + padEnd('Rate', col3) + 'Amount',
+    repeat('-', col1 + col2 + col3 + 8)
+  ];
+  for (var k = 0; k < data.items.length; k++) {
+    var pit = data.items[k];
+    var pm = pit.matches ? pit.matches[0] : null;
+    var pname = pm ? pm.name : pit.requested;
+    plainLines.push(
+      padEnd(pname, col1) +
+      padEnd(String(pit.requestedQty || 1), col2) +
+      padEnd('₹' + (pit.rate || 0), col3) +
+      '₹' + (pit.lineTotal || 0)
+    );
+  }
+  plainLines.push(repeat('-', col1 + col2 + col3 + 8));
+  plainLines.push(padEnd('Subtotal', col1 + col2) + padEnd('', col3) + '₹' + subtotal);
+  plainLines.push(padEnd('GST @ 18%', col1 + col2) + padEnd('', col3) + '₹' + gst);
+  plainLines.push(padEnd('Total (INR)', col1 + col2) + padEnd('', col3) + '₹' + total);
+  var plainText = plainLines.join('\n');
 
-  var copyText = lines.join('\n');
-  var copyBtn = '<button class="copy-btn" style="width:100%;padding:12px 14px;font-size:14px;font-weight:600;margin-top:12px;background:var(--primary);color:#fff;border:none;border-radius:8px;cursor:pointer" onclick="navigator.clipboard.writeText(' + JSON.stringify(copyText) + ');var btn=this;btn.textContent=\'✓ Copied to Clipboard\';btn.style.background=\'var(--accent)\';setTimeout(function(){btn.textContent=\'Copy Quote\';btn.style.background=\'var(--primary)\'},2000)">Copy Quote</button>';
+  var copyBtn = '<button class="copy-btn" style="width:100%;padding:14px;font-size:15px;font-weight:700;margin-top:4px;background:var(--primary);color:#fff;border:none;border-radius:10px;cursor:pointer;letter-spacing:0.3px" ' +
+    'onclick="copyQuoteRichText(this,' + JSON.stringify(htmlClip) + ',' + JSON.stringify(plainText) + ')">&#128203; Copy Quote</button>';
 
   h += copyBtn;
   h += '</div>';
   return h;
 }
 
+function padEnd(str, len) {
+  str = String(str);
+  while (str.length < len) str += ' ';
+  return str;
+}
+
+function repeat(ch, n) {
+  var s = '';
+  for (var i = 0; i < n; i++) s += ch;
+  return s;
+}
+
+function copyQuoteRichText(btn, htmlClip, plainText) {
+  var finish = function(ok) {
+    btn.textContent = ok ? '✓ Copied!' : '✓ Copied (plain text)';
+    btn.style.background = 'var(--accent)';
+    setTimeout(function() {
+      btn.innerHTML = '&#128203; Copy Quote';
+      btn.style.background = 'var(--primary)';
+    }, 2500);
+  };
+
+  if (navigator.clipboard && window.ClipboardItem) {
+    try {
+      var htmlBlob = new Blob([htmlClip], { type: 'text/html' });
+      var textBlob = new Blob([plainText], { type: 'text/plain' });
+      navigator.clipboard.write([new ClipboardItem({ 'text/html': htmlBlob, 'text/plain': textBlob })])
+        .then(function() { finish(true); })
+        .catch(function() {
+          navigator.clipboard.writeText(plainText).then(function() { finish(false); });
+        });
+    } catch(e) {
+      navigator.clipboard.writeText(plainText).then(function() { finish(false); });
+    }
+  } else if (navigator.clipboard) {
+    navigator.clipboard.writeText(plainText).then(function() { finish(false); });
+  } else {
+    finish(false);
+  }
+}
+
 function renderShowList(data) {
   var shows = data.shows || [];
   if (!shows.length) return '<div class="card-in-msg">No shows found.</div>';
 
-  var h = '<div><strong>Found ' + shows.length + ' show(s)</strong></div>';
-  h += '<div class="card-in-msg" style="overflow-x:auto">';
-  h += '<table style="width:100%;border-collapse:collapse;font-size:13px">';
-  h += '<thead><tr style="border-bottom:2px solid var(--primary);background:var(--bg)">';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Date & Venue</th>';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Program</th>';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Call Time</th>';
-  h += '<th style="text-align:left;padding:8px;font-weight:700">Assigned Crew</th>';
-  h += '</tr></thead><tbody>';
+  var label = shows.length === 1 ? '1 show' : shows.length + ' shows';
+  var h = '<div style="font-size:13px;font-weight:700;color:var(--muted);text-transform:uppercase;letter-spacing:.4px;margin-bottom:8px">' + label + '</div>';
 
   for (var k = 0; k < shows.length; k++) {
     var s = shows[k];
-    var isAlt = k % 2 === 1 ? 'background:rgba(107,119,192,0.03)' : '';
-    h += '<tr style="border-bottom:1px solid var(--border);' + isAlt + '">' +
-      '<td style="text-align:left;padding:8px"><strong>' + escapeHtml(s.event_date) + '</strong><br><span style="color:var(--muted);font-size:11px">' + escapeHtml(s.venue || 'TBD') + '</span></td>' +
-      '<td style="text-align:left;padding:8px">' + escapeHtml(s.program || '—') + '</td>' +
-      '<td style="text-align:left;padding:8px">' + escapeHtml(s.call_time || '—') + '</td>' +
-      '<td style="text-align:left;padding:8px">' + escapeHtml(s.crew || 'Not assigned') + '</td>' +
-      '</tr>';
+    var dateStr = s.event_date ? s.event_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, function(_, y, m, d) {
+      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
+      return d + ' ' + months[parseInt(m, 10) - 1] + ' ' + y;
+    }) : '—';
+    var borderTop = k > 0 ? 'border-top:1px solid var(--border);margin-top:10px;padding-top:10px' : '';
+    h += '<div style="' + borderTop + '">';
+    h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">';
+    h += '<span style="font-weight:700;font-size:14px">' + escapeHtml(s.program || '—') + '</span>';
+    h += '<span style="font-size:11px;font-weight:600;color:var(--primary);white-space:nowrap;margin-left:8px">' + escapeHtml(dateStr) + '</span>';
+    h += '</div>';
+    h += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + escapeHtml(s.venue || 'Venue TBD') + '</div>';
+    var metaRow = [];
+    if (s.call_time) metaRow.push('Call: <strong>' + escapeHtml(s.call_time) + '</strong>');
+    if (s.crew && s.crew !== 'no crew yet') metaRow.push('Crew: <strong>' + escapeHtml(s.crew) + '</strong>');
+    else metaRow.push('<span style="color:var(--muted)">No crew assigned</span>');
+    h += '<div style="font-size:13px">' + metaRow.join(' &nbsp;·&nbsp; ') + '</div>';
+    h += '</div>';
   }
 
-  h += '</tbody></table>';
-  h += '</div>';
-  return h;
+  return '<div class="card-in-msg">' + h + '</div>';
 }
 
 // ─── Helpers ───

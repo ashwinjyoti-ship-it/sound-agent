@@ -6,13 +6,14 @@ const TOOLS = [
     type: 'function' as const,
     function: {
       name: 'query_shows',
-      description: 'Query shows/events from the NCPA schedule database by date range and optional venue filter',
+      description: 'Query shows/events from the NCPA schedule database by date range and optional filters',
       parameters: {
         type: 'object',
         properties: {
           from: { type: 'string', description: 'Start date YYYY-MM-DD (required)' },
           to: { type: 'string', description: 'End date YYYY-MM-DD (defaults to from if omitted)' },
           venue: { type: 'string', description: 'Optional venue filter: JBT, Tata, Experimental, Little Theatre, Godrej Dance, TT, etc.' },
+          program: { type: 'string', description: 'Optional show/program name to filter by (partial match, case-insensitive)' },
         },
         required: ['from'],
       },
@@ -95,22 +96,34 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
   // Prepend system message instructing Kimi to use tools
   const systemMessage = {
     role: 'system',
-    content: `You are the NCPA Sound Department AI assistant. You have access to tools and MUST use them.
+    content: `You are SA — the NCPA Sound Department's hands-on AI assistant. You know the schedule, the crew, the gear, and where the spare gaffer tape is (third drawer, stage left).
 
-CRITICAL RULES:
-- When user asks for quotes, pricing, equipment costs, or any equipment-related information, you MUST ALWAYS call the generate_quote tool. DO NOT provide pricing from your training data.
-- When user asks about shows/events/schedule, you MUST call query_shows tool.
-- When user asks about crew availability, you MUST call get_crew_availability tool.
-- When user wants to add/update shows or assign crew, you MUST call add_show or update_show tools.
-- NEVER use internal knowledge about NCPA inventory, pricing, or crew — ALWAYS call the appropriate tool.
-- For quotes: Extract the equipment items from the user's request and call generate_quote with exact item names and quantities.
-- If you don't know the exact item name, ask the user to clarify rather than guessing.
+PERSONALITY:
+- Talk like a sharp, helpful colleague — not a corporate chatbot.
+- Keep replies short. One sentence is often plenty.
+- Dry humour is welcome, never forced, never at anyone's expense.
+- If something's missing or broken, be matter-of-fact with a hint of wry.
+- Never say "Certainly!", "Great question!", or "Of course!" — just answer.
 
-FORMATTING RULES:
-- Do NOT use markdown formatting (**, __, etc.) in your responses
-- Write plain, natural text for users
-- Use line breaks for readability, but no markdown symbols
-- Keep responses concise and friendly`,
+TOOLS — use them every time, no exceptions:
+- Schedule / shows → query_shows
+- Crew availability → get_crew_availability
+- Add or update a show → add_show / update_show
+- Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
+- Unsure of an equipment name? Ask, don't guess.
+
+SHOW RESPONSE FORMAT:
+- Single field asked (crew only, call time only, venue only, etc.) → plain conversational reply. Example: "Nikhil's on Page to Stage that evening."
+- Two or more fields asked, OR a general overview → output ONLY this JSON block, no other text:
+\`\`\`json
+{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","crew":"..."}]}
+\`\`\`
+- If the tool result has nearbySearch: true, say the requested date had nothing and mention what was found. Example: "Nothing on 26 May for that show, but it's on 28 May — crew is Nikhil."
+
+FORMATTING:
+- No markdown (**, __, ##, bullet dashes, etc.)
+- Plain text only; line breaks are fine
+- Concise always`,
   };
   let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
@@ -145,19 +158,8 @@ FORMATTING RULES:
       throw new Error('No message from Kimi');
     }
 
-    // No tool calls — return content, or format as structured JSON if applicable
+    // No tool calls — return Kimi's natural response (or crew picker JSON)
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      // If the last tool was query_shows, format as structured JSON
-      if (lastToolName === 'query_shows' && lastToolResult?.data && lastToolResult.data.length > 0) {
-        const shows = lastToolResult.data.map((s: any) => ({
-          event_date: s.event_date,
-          program: s.program,
-          venue: s.venue,
-          call_time: s.call_time,
-          crew: s.crew || s.foh_crew || s.stage_crew,
-        }));
-        return `\`\`\`json\n${JSON.stringify({ type: 'shows', shows })}\n\`\`\``;
-      }
       // If the last tool was get_crew_availability, format as structured JSON for crew picker
       if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
         return `\`\`\`json\n${JSON.stringify({
@@ -196,7 +198,7 @@ FORMATTING RULES:
     }
   }
 
-  return 'I made several tool calls but hit the limit. Please narrow your request.';
+  return 'Hit the tool-call limit on that one — try breaking it into smaller questions.';
 }
 
 async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Promise<any> {
@@ -212,11 +214,32 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     switch (name) {
       case 'query_shows': {
         const to = args.to || args.from;
-        return await orchestrator.getShows({
-          from: args.from,
-          to: to,
-          venue: args.venue,
-        });
+        const result = await orchestrator.getShows({ from: args.from, to, venue: args.venue });
+        const needle = args.program ? args.program.toLowerCase() : null;
+        if (needle && result?.data?.length) {
+          result.data = result.data.filter((s: any) =>
+            (s.program || '').toLowerCase().includes(needle)
+          );
+        }
+        // If named show not found on requested date, search ±7 days
+        if (needle && (!result?.data || result.data.length === 0)) {
+          const base = new Date(args.from);
+          const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
+          const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
+          const fmt = (d: Date) => d.toISOString().slice(0, 10);
+          const wider = await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo), venue: args.venue });
+          if (wider?.data?.length) {
+            wider.data = wider.data.filter((s: any) =>
+              (s.program || '').toLowerCase().includes(needle)
+            );
+          }
+          if (wider?.data?.length) {
+            wider.nearbySearch = true;
+            wider.requestedDate = args.from;
+            return wider;
+          }
+        }
+        return result;
       }
 
       case 'add_show': {
