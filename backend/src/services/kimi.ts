@@ -95,10 +95,15 @@ const TOOLS = [
 ];
 
 export async function chatWithKimi(messages: any[], orchestrator: OrchestratorClient): Promise<string> {
+  const today = new Date().toISOString().slice(0, 10);
+  const currentYear = new Date().getFullYear();
+
   // Prepend system message instructing Kimi to use tools
   const systemMessage = {
     role: 'system',
     content: `You are SA — the NCPA Sound Department's hands-on AI assistant. You know the schedule, the crew, the gear, and where the spare gaffer tape is (third drawer, stage left).
+
+TODAY'S DATE: ${today} (year ${currentYear}). When a user says a date without a year, default to ${currentYear}. "24 May 26" means 24 May 2026 — the trailing two-digit number is the year, not a day range. Never search a past year when the user clearly means the current or next year.
 
 PERSONALITY:
 - Talk like a sharp, helpful colleague — not a corporate chatbot.
@@ -113,6 +118,7 @@ TOOLS — use them every time, no exceptions:
 - Add a show → add_show
 - Update a show (sound requirements, call time, crew) → call query_shows with the date and program name. Do NOT ask for venue first — just search. Always pass event_date when calling update_show. If update_show returns requires_confirmation: true, show the user the existing values from the response and ask them to confirm before calling update_show again with confirmed: true.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
+- Quote items shorthand: "M4-2" means 2x M4, "SM58-5" means 5x SM58 — the trailing number after the dash is QUANTITY. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
 - Unsure of an equipment name? Ask, don't guess.
 
 SHOW QUERY RULES:
@@ -419,9 +425,14 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     // Also include shorter terms for model numbers like "M4", "C4", etc.
     const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0 && !/^\d+$/.test(w));
 
-    // Extract quantity
-    const qtyMatch = item.match(/(\d+)/);
-    const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
+    // Extract quantity — prefer leading "N " or trailing "-N" (NAME-QTY shorthand like "M4-2")
+    const leadingQty = item.match(/^(\d+)\s+/);
+    const trailingQty = item.match(/-(\d+)$/);
+    const qty = leadingQty
+      ? parseInt(leadingQty[1])
+      : trailingQty
+        ? parseInt(trailingQty[1])
+        : 1;
 
     // Find best match in quote-builder DB — score by word overlap
     let bestMatch: any = null;
