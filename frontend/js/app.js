@@ -13,7 +13,7 @@ let messages = [];
 
 // ─── Init ───
 function init() {
-  addMsg('assistant', '👋 Hey. I can help you:\n• Add or update shows\n• Check crew availability\n• Generate equipment quotes\n• Query the schedule\n\nTry: "Add show 31 May JBT quartet" or "Who is free on 17 May?"');
+  addMsg('assistant', '👋 Hey. I can help you:\n• Add or update shows\n• Check crew availability\n• Generate equipment quotes\n• Query the schedule\n\nTry: "Add show 31 May JBT quartet" or "Who is free on 17 May?"\n\nType /clear to start a fresh conversation.');
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -75,6 +75,15 @@ textInp.addEventListener('keydown', function(e) {
 async function sendMessage() {
   const text = textInp.value.trim();
   if (!text) return;
+
+  // Handle /clear command
+  if (text.toLowerCase() === '/clear') {
+    chatEl.innerHTML = '';
+    messages = [];
+    textInp.value = '';
+    addMsg('assistant', '✓ Chat cleared. Starting fresh!');
+    return;
+  }
 
   addMsg('user', text);
   messages.push({ role: 'user', content: text });
