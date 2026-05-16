@@ -70,3 +70,4 @@ Auto-deploy happens on every push to `main`.
 - No auth for v1 (just you + 2IC)
 - iPhone + Android both supported
 - Quotes are copy-paste (no direct Outlook send due to org auth)
+
