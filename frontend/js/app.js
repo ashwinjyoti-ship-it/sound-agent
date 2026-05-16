@@ -146,14 +146,38 @@ async function sendMessage() {
   }
 }
 
+// ─── Mascot ───
+function mascotSVG(cls) {
+  return '<svg class="' + cls + '" viewBox="0 0 48 54" xmlns="http://www.w3.org/2000/svg" style="width:42px;height:48px;overflow:visible;display:block">' +
+    '<path d="M11,17 Q24,6 37,17" stroke="#323639" stroke-width="2.5" fill="none" stroke-linecap="round"/>' +
+    '<rect x="6" y="14" width="7" height="8" rx="2.5" fill="#82857E"/>' +
+    '<rect x="35" y="14" width="7" height="8" rx="2.5" fill="#82857E"/>' +
+    '<rect x="1" y="22" width="7" height="5" rx="2.5" fill="#D47A31"/>' +
+    '<rect x="40" y="22" width="7" height="5" rx="2.5" fill="#D47A31"/>' +
+    '<rect x="8" y="18" width="32" height="24" rx="3" fill="#D47A31"/>' +
+    '<rect x="10" y="20" width="28" height="20" rx="2" fill="#1E2022"/>' +
+    '<circle cx="24" cy="29" r="8" fill="#323639"/>' +
+    '<circle cx="24" cy="29" r="5.5" fill="#1E2022"/>' +
+    '<circle cx="24" cy="29" r="2" fill="#82857E"/>' +
+    '<rect x="17" y="36" width="14" height="4" rx="1" fill="#D47A31" opacity="0.9"/>' +
+    '<text x="24" y="39.3" font-family="sans-serif" font-size="3.2" font-weight="700" text-anchor="middle" fill="white" letter-spacing="0.3">CREW</text>' +
+    '<rect x="14" y="42" width="6" height="7" rx="2" fill="#D47A31"/>' +
+    '<rect x="28" y="42" width="6" height="7" rx="2" fill="#D47A31"/>' +
+    '<rect x="11" y="48" width="10" height="4" rx="2" fill="#1E2022"/>' +
+    '<rect x="27" y="48" width="10" height="4" rx="2" fill="#1E2022"/>' +
+    '</svg>';
+}
+
 // ─── Message UI ───
 function addMsg(role, text) {
   const div = document.createElement('div');
   div.className = 'msg msg-' + role;
   // Clean markdown formatting and escape HTML
   const cleanText = stripMarkdown(text);
-  div.innerHTML = '<div class="msg-avatar">' + (role === 'user' ? 'You' : 'SA') + '</div>' +
-    '<div class="msg-body">' + escapeHtml(cleanText) + '</div>';
+  var avatarHtml = role === 'user'
+    ? '<div class="msg-avatar-user">You</div>'
+    : '<div class="msg-avatar-sa">' + mascotSVG('mascot-idle') + '</div>';
+  div.innerHTML = avatarHtml + '<div class="msg-body">' + escapeHtml(cleanText) + '</div>';
   chatEl.appendChild(div);
   scrollToBottom();
   return div;
@@ -178,7 +202,7 @@ function addLoading() {
   const div = document.createElement('div');
   div.id = id;
   div.className = 'msg msg-assistant';
-  div.innerHTML = '<div class="msg-avatar">SA</div>' +
+  div.innerHTML = '<div class="msg-avatar-sa">' + mascotSVG('mascot-think') + '</div>' +
     '<div class="msg-body"><div class="loading"><div class="spinner"></div>On it…</div></div>';
   chatEl.appendChild(div);
   scrollToBottom();
@@ -209,7 +233,7 @@ function renderStructured(data) {
   const div = document.createElement('div');
   div.className = 'msg msg-assistant';
 
-  let html = '<div class="msg-avatar">SA</div><div class="msg-body">';
+  let html = '<div class="msg-avatar-sa">' + mascotSVG('mascot-idle') + '</div><div class="msg-body">';
 
   if (data.type === 'crew_availability') {
     html += renderCrewPicker(data);
@@ -405,11 +429,11 @@ function renderQuote(data) {
       '</tr>';
   }
   var htmlClip = '<table style="border-collapse:collapse;font-family:Arial,sans-serif;font-size:13px">' +
-    '<thead><tr style="background:#4a4a8a;color:#fff">' +
-    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:left">Item</th>' +
-    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:center">Qty</th>' +
-    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:right">Rate</th>' +
-    '<th style="padding:8px 12px;border:1px solid #4a4a8a;text-align:right">Amount</th>' +
+    '<thead><tr style="background:#D47A31;color:#fff">' +
+    '<th style="padding:8px 12px;border:1px solid #D47A31;text-align:left">Item</th>' +
+    '<th style="padding:8px 12px;border:1px solid #D47A31;text-align:center">Qty</th>' +
+    '<th style="padding:8px 12px;border:1px solid #D47A31;text-align:right">Rate</th>' +
+    '<th style="padding:8px 12px;border:1px solid #D47A31;text-align:right">Amount</th>' +
     '</tr></thead><tbody>' + htmlRows + '</tbody>' +
     '<tfoot>' +
     '<tr><td colspan="3" style="padding:6px 10px;border:1px solid #ddd;text-align:right">Subtotal</td><td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + subtotal.toLocaleString('en-IN') + '</td></tr>' +
