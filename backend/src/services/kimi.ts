@@ -336,7 +336,10 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
 
   for (const item of items) {
     const itemLower = item.toLowerCase();
-    const words = itemLower.split(/\s+/).filter((w: string) => w.length > 2);
+    // Split on whitespace AND dashes/hyphens to catch "M4-2" → ["m4", "2"]
+    const words = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 2);
+    // Also include shorter terms for model numbers like "M4", "C4", etc.
+    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0);
 
     // Extract quantity
     const qtyMatch = item.match(/(\d+)/);
@@ -349,14 +352,17 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     for (const eq of equipList) {
       const name = (eq.name || '').toLowerCase();
       const category = (eq.category || '').toLowerCase();
-      const nameWords = name.split(/\s+/);
-      const categoryWords = category.split(/\s+/);
+      const nameWords = name.split(/[\s\-]+/);
+      const categoryWords = category.split(/[\s\-]+/);
 
       let score = 0;
-      for (const word of words) {
-        if (name === word || nameWords.includes(word)) score += 3; // exact word match
-        else if (name.includes(word)) score += 2; // partial name match
-        if (categoryWords.includes(word)) score += 1; // category match
+      // Score each term from user input
+      for (const term of allTerms) {
+        // Exact word match in equipment name or category
+        if (nameWords.includes(term)) score += 3;
+        else if (categoryWords.includes(term)) score += 2;
+        // Partial match (e.g., "M4" in "M4 MONITORS")
+        else if (name.includes(term)) score += 2;
       }
 
       if (score > bestScore) {

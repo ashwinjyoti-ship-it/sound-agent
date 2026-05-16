@@ -319,79 +319,80 @@ function attachCrewListeners(data) {
 }
 
 function renderQuote(data) {
-  var h = '<div><strong>Equipment Quote</strong></div>';
+  var h = '<div class="card-in-msg">';
 
   if (!data.items || !data.items.length) {
-    h += '<div class="card-in-msg">No items matched.</div>';
-    return h;
+    h += '<div>No items matched.</div>';
+    return h + '</div>';
   }
 
-  h += '<div class="card-in-msg">';
-  h += '<table class="quote-table">';
-  h += '<thead><tr><th>Item</th><th>Qty</th><th>Rate (₹)</th><th>Amount (₹)</th></tr></thead><tbody>';
+  // Simple clean table
+  h += '<table class="quote-table" style="margin-bottom:12px">';
+  h += '<thead><tr><th>Item</th><th style="text-align:center">Qty</th><th style="text-align:right">Rate</th><th style="text-align:right">Amount</th></tr></thead><tbody>';
 
   for (var i = 0; i < data.items.length; i++) {
     var item = data.items[i];
     var match = item.matches ? item.matches[0] : null;
     var rate = item.rate || 0;
     var lineTotal = item.lineTotal || 0;
+    var itemName = match ? match.name : item.requested;
     h += '<tr>' +
-      '<td>' + escapeHtml(match ? match.name : item.requested) + '</td>' +
-      '<td>' + (item.requestedQty || 1) + '</td>' +
-      '<td>' + (rate ? '₹' + rate.toLocaleString('en-IN') : '—') + '</td>' +
-      '<td>' + (lineTotal ? '₹' + lineTotal.toLocaleString('en-IN') : '—') + '</td>' +
+      '<td>' + escapeHtml(itemName) + '</td>' +
+      '<td style="text-align:center">' + (item.requestedQty || 1) + '</td>' +
+      '<td style="text-align:right">' + (rate ? '₹' + rate.toLocaleString('en-IN') : '—') + '</td>' +
+      '<td style="text-align:right">' + (lineTotal ? '₹' + lineTotal.toLocaleString('en-IN') : '—') + '</td>' +
       '</tr>';
   }
 
-  // Totals row
   var subtotal = data.subtotal || 0;
   var gst = data.gst || 0;
   var total = data.total || 0;
 
   h += '<tr style="border-top:2px solid var(--primary-light);font-weight:600">' +
-    '<td colspan="3" style="text-align:right;padding-right:12px">Subtotal</td>' +
-    '<td>₹' + subtotal.toLocaleString('en-IN') + '</td></tr>';
+    '<td colspan="3" style="text-align:right;padding-right:8px">Subtotal</td>' +
+    '<td style="text-align:right">₹' + subtotal.toLocaleString('en-IN') + '</td></tr>';
   h += '<tr style="font-weight:600">' +
-    '<td colspan="3" style="text-align:right;padding-right:12px">GST @ 18%</td>' +
-    '<td>₹' + gst.toLocaleString('en-IN') + '</td></tr>';
-  h += '<tr style="font-weight:700;background:var(--primary-light);color:var(--primary-dark)">' +
-    '<td colspan="3" style="text-align:right;padding-right:12px">TOTAL</td>' +
-    '<td>₹' + total.toLocaleString('en-IN') + '</td></tr>';
+    '<td colspan="3" style="text-align:right;padding-right:8px">GST (18%)</td>' +
+    '<td style="text-align:right">₹' + gst.toLocaleString('en-IN') + '</td></tr>';
+  h += '<tr style="font-weight:700;background:var(--primary);color:#fff">' +
+    '<td colspan="3" style="text-align:right;padding-right:8px">TOTAL</td>' +
+    '<td style="text-align:right">₹' + total.toLocaleString('en-IN') + '</td></tr>';
 
-  h += '</tbody></table></div>';
+  h += '</tbody></table>';
 
-  // Copyable text (matches quote-builder format)
+  // Generate clean copy text for email
   var today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
-  var textLines = ['NATIONAL CENTRE FOR THE PERFORMING ARTS', 'Sound Equipment Hire — Quote', ''];
-  textLines.push('Date: ' + today);
-  textLines.push('');
-  textLines.push('ITEM'.padEnd(38) + 'QTY'.padStart(4) + 'RATE'.padStart(10) + 'AMOUNT'.padStart(12));
-  textLines.push('─'.repeat(62));
+  var lines = [
+    'EQUIPMENT HIRE QUOTE',
+    'Date: ' + today,
+    '',
+    'ITEM | QTY | RATE | AMOUNT',
+    '─'.repeat(70)
+  ];
 
   for (var j = 0; j < data.items.length; j++) {
     var it = data.items[j];
     var m = it.matches ? it.matches[0] : null;
     var name = m ? m.name : it.requested;
-    if (name.length > 37) name = name.slice(0, 34) + '...';
-    var qty = String(it.requestedQty || 1).padStart(4);
-    var rateStr = it.rate ? String(it.rate).padStart(10) : ''.padStart(10);
-    var amtStr = it.lineTotal ? String(it.lineTotal).padStart(12) : ''.padStart(12);
-    textLines.push(name.padEnd(38) + qty + rateStr + amtStr);
+    var qty = (it.requestedQty || 1);
+    var rate = (it.rate || 0);
+    var amt = (it.lineTotal || 0);
+    lines.push(name + ' | ' + qty + ' | ₹' + rate + ' | ₹' + amt);
   }
 
-  textLines.push('─'.repeat(62));
-  textLines.push('Subtotal'.padEnd(54) + String(subtotal).padStart(8));
-  textLines.push('GST @ 18%'.padEnd(54) + String(gst).padStart(8));
-  textLines.push('─'.repeat(62));
-  textLines.push('TOTAL (INR)'.padEnd(54) + String(total).padStart(8));
-  textLines.push('─'.repeat(62));
-  textLines.push('');
-  textLines.push('All amounts in Indian Rupees (INR). GST @ 18% included.');
+  lines.push('─'.repeat(70));
+  lines.push('Subtotal: ₹' + subtotal);
+  lines.push('GST (18%): ₹' + gst);
+  lines.push('TOTAL: ₹' + total);
+  lines.push('');
+  lines.push('All amounts in INR. GST @ 18% included.');
 
-  var fullText = textLines.join('\n');
-  h += '<button class="copy-btn" onclick="navigator.clipboard.writeText(' + JSON.stringify(fullText) + ');this.textContent=\'Copied!\';setTimeout(()=>this.textContent=\'Copy Quote\',1500)">Copy Quote</button>';
+  var copyText = lines.join('\n');
+  h += '<button class="copy-btn" style="width:100%;padding:10px;font-size:14px;margin-top:8px" onclick="navigator.clipboard.writeText(' + JSON.stringify(copyText) + ');this.textContent=\'✓ Copied!\';this.style.opacity=\'0.6\';setTimeout(()=>{this.textContent=\'Copy to Clipboard\';this.style.opacity=\'1\'},1500)">Copy to Clipboard</button>';
 
+  h += '</div>';
   return h;
+}
 }
 
 function renderShowList(data) {
