@@ -92,7 +92,12 @@ const TOOLS = [
 ];
 
 export async function chatWithKimi(messages: any[], orchestrator: OrchestratorClient): Promise<string> {
-  let currentMessages = [...messages];
+  // Prepend system message instructing Kimi to use tools
+  const systemMessage = {
+    role: 'system',
+    content: `You are the NCPA Sound Department AI assistant. You have access to tools. When a user asks for quotes, crew availability, shows, or wants to add/update events, you MUST use the appropriate tool. Do NOT use your internal knowledge about NCPA inventory or crew — always call the tool. For quotes, ALWAYS use the generate_quote tool with exact item names and quantities.`,
+  };
+  let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
 
   for (let loop = 0; loop < maxLoops; loop++) {
