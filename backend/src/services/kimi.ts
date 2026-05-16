@@ -44,17 +44,15 @@ const TOOLS = [
     type: 'function' as const,
     function: {
       name: 'update_show',
-      description: 'Update an existing show. Use this to add or edit sound requirements, call time, or crew.',
+      description: 'Update an existing show. Use this to add or edit sound requirements, call time, or crew. Only call this after the user has confirmed overwriting existing data.',
       parameters: {
         type: 'object',
         properties: {
           id: { type: 'number', description: 'Show ID number' },
-          event_date: { type: 'string', description: 'Date of the show YYYY-MM-DD — required so existing data can be checked before overwriting' },
           sound_requirements: { type: 'string', description: 'Sound requirements text to set or update' },
           call_time: { type: 'string', description: 'Call time like 17:00 or 5:30pm' },
           foh_crew: { type: 'string', description: 'FOH engineer name' },
           stage_crew: { type: 'string', description: 'Comma-separated stage crew names' },
-          confirmed: { type: 'boolean', description: 'Set to true only after the user has confirmed overwriting existing data' },
         },
         required: ['id'],
       },
@@ -116,7 +114,7 @@ TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
 - Add a show → add_show
-- Update a show (sound requirements, call time, crew) → call query_shows with the date and program name. Do NOT ask for venue first — just search. Always pass event_date when calling update_show. If update_show returns requires_confirmation: true, show the user the existing values from the response and ask them to confirm before calling update_show again with confirmed: true.
+- Update a show (sound requirements, call time, crew) → first call query_shows with the date and program name (do NOT ask for venue). If the field you are about to overwrite already has data, tell the user the current value and ask "Overwrite with X?" — wait for their reply. Once they confirm, call update_show with the show id and the new value. Never say "Done" or "Updated" unless you have actually called update_show and received a success response.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Quote items shorthand: "M4-2" or "2xM4" both mean 2x M4 — trailing dash-number or leading Nx are quantity markers. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
 - Unsure of an equipment name? Ask, don't guess.
@@ -297,27 +295,6 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
       }
 
       case 'update_show': {
-        // If not yet confirmed, fetch current show and check for existing data
-        if (!args.confirmed && args.event_date) {
-          const current = (await orchestrator.getShows({ from: args.event_date, to: args.event_date })) as any;
-          const show = (current?.data || []).find((s: any) => s.id === args.id);
-          if (show) {
-            const conflicts: Record<string, string> = {};
-            if (args.sound_requirements !== undefined && show.sound_requirements) conflicts.sound_requirements = show.sound_requirements;
-            if (args.call_time !== undefined && show.call_time) conflicts.call_time = show.call_time;
-            if (args.foh_crew !== undefined && show.foh_crew) conflicts.foh_crew = show.foh_crew;
-            if (args.stage_crew !== undefined && show.stage_crew) conflicts.stage_crew = show.stage_crew;
-            if (Object.keys(conflicts).length > 0) {
-              return {
-                requires_confirmation: true,
-                show_id: args.id,
-                show_name: show.program,
-                existing: conflicts,
-                message: 'Fields already have data — confirm before overwriting',
-              };
-            }
-          }
-        }
         const patch: any = {};
         if (args.sound_requirements !== undefined) patch.sound_requirements = args.sound_requirements;
         if (args.call_time !== undefined) patch.call_time = args.call_time;
