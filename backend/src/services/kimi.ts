@@ -284,10 +284,12 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
   const inventory: any[] = inventoryData.data || [];
 
   const results: any[] = [];
+  let subtotal = 0;
+  const GST_RATE = 0.18;
 
   for (const item of items) {
     const itemLower = item.toLowerCase();
-    const words = itemLower.split(/\s+/).filter(w => w.length > 2);
+    const words = itemLower.split(/\s+/).filter((w: string) => w.length > 2);
 
     // Try to extract quantity
     const qtyMatch = item.match(/(\d+)/);
@@ -303,6 +305,11 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
       );
     });
 
+    const bestMatch = matches[0];
+    const rate = bestMatch?.rental_price || bestMatch?.price || 0;
+    const lineTotal = rate * requestedQty;
+    subtotal += lineTotal;
+
     results.push({
       requested: item,
       requestedQty,
@@ -313,8 +320,19 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
         price: m.rental_price || m.price || null,
         available: m.status === 'available',
       })),
+      rate,
+      lineTotal,
     });
   }
 
-  return { success: true, items: results };
+  const gst = Math.round(subtotal * GST_RATE);
+  const total = subtotal + gst;
+
+  return {
+    success: true,
+    items: results,
+    subtotal,
+    gst,
+    total,
+  };
 }
