@@ -281,7 +281,7 @@ async function getMergedCrewAvailability(date: string, orchestrator: Orchestrato
 
 async function generateEquipmentQuote(items: string[], orchestrator: OrchestratorClient) {
   // 1. Get quote-builder equipment list
-  const equipListData = await orchestrator.fetch('/api/quotes/equipment') as any;
+  const equipListData = await orchestrator.getQuoteEquipment() as any;
   const equipList: any[] = equipListData.data || [];
 
   // 2. Parse and match each requested item

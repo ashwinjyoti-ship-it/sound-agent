@@ -58,7 +58,14 @@ export class OrchestratorClient {
     return this.fetch('/api/crew/list');
   }
 
-  async getInventory() {
-    return this.fetch('/api/inventory/equipment');
+  async getQuoteEquipment() {
+    return this.fetch('/api/quotes/equipment');
+  }
+
+  async generateQuote(data: any) {
+    return this.fetch('/api/quotes/generate', {
+      method: 'POST',
+      body: JSON.stringify(data),
+    });
   }
 }
