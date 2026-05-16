@@ -103,7 +103,7 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
         'Content-Type': 'application/json',
       },
       body: JSON.stringify({
-        model: 'kimi-k2-6',
+        model: 'kimi-k2.6',
         messages: currentMessages,
         tools: TOOLS,
         tool_choice: 'auto',

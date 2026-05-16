@@ -2,7 +2,7 @@ import dotenv from 'dotenv';
 dotenv.config();
 
 export const KIMI_API_KEY = process.env.KIMI_API_KEY || '';
-export const KIMI_API_URL = 'https://api.moonshot.cn/v1/chat/completions';
+export const KIMI_API_URL = 'https://api.moonshot.ai/v1/chat/completions';
 export const ORCHESTRATOR_URL = 'https://ncpa-orchestrator.ashwinjyoti.workers.dev';
 export const ORCHESTRATOR_TOKEN = process.env.ORCHESTRATOR_TOKEN || '';
 export const PORT = parseInt(process.env.PORT || '3000', 10);
