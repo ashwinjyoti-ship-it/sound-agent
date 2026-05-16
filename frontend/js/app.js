@@ -26,10 +26,20 @@ function init() {
       const transcript = e.results[0][0].transcript;
       textInp.value = transcript;
       stopRecording();
-      sendMessage();
+      textInp.classList.add('recognized');
+      textInp.focus();
+      setTimeout(function() {
+        textInp.classList.remove('recognized');
+        sendMessage();
+      }, 500);
     };
 
-    recognition.onerror = function() { stopRecording(); };
+    recognition.onerror = function(e) {
+      stopRecording();
+      if (e.error !== 'no-speech') {
+        addMsg('assistant', '⚠ Mic error: ' + e.error);
+      }
+    };
     recognition.onend = function() { stopRecording(); };
   } else {
     micBtn.style.display = 'none';
