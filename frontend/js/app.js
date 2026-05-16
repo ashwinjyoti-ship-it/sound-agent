@@ -148,24 +148,7 @@ async function sendMessage() {
 
 // ─── Mascot ───
 function mascotSVG(cls) {
-  return '<svg class="' + cls + '" viewBox="0 0 48 54" xmlns="http://www.w3.org/2000/svg" style="width:42px;height:48px;overflow:visible;display:block">' +
-    '<path d="M11,17 Q24,6 37,17" stroke="#323639" stroke-width="2.5" fill="none" stroke-linecap="round"/>' +
-    '<rect x="6" y="14" width="7" height="8" rx="2.5" fill="#82857E"/>' +
-    '<rect x="35" y="14" width="7" height="8" rx="2.5" fill="#82857E"/>' +
-    '<rect x="1" y="22" width="7" height="5" rx="2.5" fill="#D47A31"/>' +
-    '<rect x="40" y="22" width="7" height="5" rx="2.5" fill="#D47A31"/>' +
-    '<rect x="8" y="18" width="32" height="24" rx="3" fill="#D47A31"/>' +
-    '<rect x="10" y="20" width="28" height="20" rx="2" fill="#1E2022"/>' +
-    '<circle cx="24" cy="29" r="8" fill="#323639"/>' +
-    '<circle cx="24" cy="29" r="5.5" fill="#1E2022"/>' +
-    '<circle cx="24" cy="29" r="2" fill="#82857E"/>' +
-    '<rect x="17" y="36" width="14" height="4" rx="1" fill="#D47A31" opacity="0.9"/>' +
-    '<text x="24" y="39.3" font-family="sans-serif" font-size="3.2" font-weight="700" text-anchor="middle" fill="white" letter-spacing="0.3">CREW</text>' +
-    '<rect x="14" y="42" width="6" height="7" rx="2" fill="#D47A31"/>' +
-    '<rect x="28" y="42" width="6" height="7" rx="2" fill="#D47A31"/>' +
-    '<rect x="11" y="48" width="10" height="4" rx="2" fill="#1E2022"/>' +
-    '<rect x="27" y="48" width="10" height="4" rx="2" fill="#1E2022"/>' +
-    '</svg>';
+  return '<img class="' + cls + '" src="/images/mascot.png" alt="Sound Agent" style="width:64px;height:auto;display:block;filter:drop-shadow(0 2px 6px rgba(30,32,34,0.18))">';
 }
 
 // ─── Message UI ───
