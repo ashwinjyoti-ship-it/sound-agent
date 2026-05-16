@@ -381,10 +381,9 @@ function renderQuote(data) {
   h += '</div>';
   h += '</div>';
 
-  // Copy text
+  // Copy text - simple format for email
   var today = new Date().toLocaleDateString('en-IN', { day: '2-digit', month: 'long', year: 'numeric' });
   var lines = [
-    'EQUIPMENT HIRE QUOTE',
     'Date: ' + today,
     '',
     'Item | Qty | Rate | Amount'
