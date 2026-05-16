@@ -95,7 +95,16 @@ export async function chatWithKimi(messages: any[], orchestrator: OrchestratorCl
   // Prepend system message instructing Kimi to use tools
   const systemMessage = {
     role: 'system',
-    content: `You are the NCPA Sound Department AI assistant. You have access to tools. When a user asks for quotes, crew availability, shows, or wants to add/update events, you MUST use the appropriate tool. Do NOT use your internal knowledge about NCPA inventory or crew — always call the tool. For quotes, ALWAYS use the generate_quote tool with exact item names and quantities.`,
+    content: `You are the NCPA Sound Department AI assistant. You have access to tools and MUST use them.
+
+CRITICAL RULES:
+- When user asks for quotes, pricing, equipment costs, or any equipment-related information, you MUST ALWAYS call the generate_quote tool. DO NOT provide pricing from your training data.
+- When user asks about shows/events/schedule, you MUST call query_shows tool.
+- When user asks about crew availability, you MUST call get_crew_availability tool.
+- When user wants to add/update shows or assign crew, you MUST call add_show or update_show tools.
+- NEVER use internal knowledge about NCPA inventory, pricing, or crew — ALWAYS call the appropriate tool.
+- For quotes: Extract the equipment items from the user's request and call generate_quote with exact item names and quantities.
+- If you don't know the exact item name, ask the user to clarify rather than guessing.`,
   };
   let currentMessages = [systemMessage, ...messages];
   const maxLoops = 5;
@@ -316,21 +325,37 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     const qtyMatch = item.match(/(\d+)/);
     const qty = qtyMatch ? parseInt(qtyMatch[1]) : 1;
 
-    // Find best match in quote-builder DB
-    const matches = equipList.filter((eq: any) => {
+    // Score-based matching: find best match by counting word matches
+    let bestMatch: any = null;
+    let bestScore = 0;
+
+    for (const eq of equipList) {
       const name = (eq.name || '').toLowerCase();
       const category = (eq.category || '').toLowerCase();
-      return words.some((word: string) =>
-        name.includes(word) || category.includes(word)
-      );
-    });
+      let score = 0;
 
-    if (matches.length === 0) {
+      for (const word of words) {
+        if (name.includes(word) || category.includes(word)) {
+          score += 1;
+        }
+      }
+
+      // Exact phrase match gets high score
+      if (name.includes(itemLower) || category.includes(itemLower)) {
+        score += 100;
+      }
+
+      if (score > bestScore) {
+        bestScore = score;
+        bestMatch = eq;
+      }
+    }
+
+    if (!bestMatch || bestScore === 0) {
       unmatched.push(item);
       continue;
     }
 
-    const bestMatch = matches[0];
     quoteItems.push({
       name: bestMatch.name,
       quantity: qty,
