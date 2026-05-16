@@ -314,12 +314,27 @@ function renderCrewPicker(data) {
 function attachCrewListeners(data) {
   var date = data.date;
 
-  document.querySelectorAll('input[name="foh"]').forEach(function(el) {
-    el.addEventListener('change', function() {
-      if (!el.value) return;
-      var stageCb = document.getElementById('stage-' + sid(el.value));
-      if (stageCb) stageCb.checked = false;
+  function syncStageChoices() {
+    var fohRadio = document.querySelector('input[name="foh"]:checked');
+    var foh = fohRadio ? fohRadio.value : '';
+
+    document.querySelectorAll('input[name="stage"]').forEach(function(stageCb) {
+      var pill = stageCb.closest('.stage-pill');
+      var isFoh = !!foh && stageCb.value === foh;
+
+      if (isFoh) {
+        stageCb.checked = false;
+        stageCb.disabled = true;
+        if (pill) pill.style.display = 'none';
+      } else {
+        stageCb.disabled = false;
+        if (pill) pill.style.display = '';
+      }
     });
+  }
+
+  document.querySelectorAll('input[name="foh"]').forEach(function(el) {
+    el.addEventListener('change', syncStageChoices);
   });
 
   document.querySelectorAll('input[name="stage"]').forEach(function(el) {
@@ -329,9 +344,12 @@ function attachCrewListeners(data) {
       if (fohRadio && fohRadio.value === el.value) {
         var noneRadio = document.getElementById('foh-none');
         if (noneRadio) noneRadio.checked = true;
+        syncStageChoices();
       }
     });
   });
+
+  syncStageChoices();
 
   var assignBtn = document.getElementById('btn-assign');
   if (assignBtn) {
