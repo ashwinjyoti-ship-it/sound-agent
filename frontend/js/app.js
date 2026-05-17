@@ -63,15 +63,23 @@ function init() {
 }
 
 function syncViewportHeight() {
-  const viewport = window.visualViewport;
-  const height = viewport ? viewport.height : window.innerHeight;
-  document.documentElement.style.setProperty('--app-height', height + 'px');
+  var vv = window.visualViewport;
+  var inputBarEl = document.querySelector('.input-bar');
+  if (vv) {
+    document.documentElement.style.setProperty('--app-height', vv.height + 'px');
+    // Push the fixed input bar above the keyboard
+    var keyboardH = window.innerHeight - vv.height - vv.offsetTop;
+    if (inputBarEl) inputBarEl.style.bottom = Math.max(keyboardH, 0) + 'px';
+  } else {
+    document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
+  }
 }
 
 window.addEventListener('resize', syncViewportHeight);
 window.addEventListener('orientationchange', syncViewportHeight);
 if (window.visualViewport) {
   window.visualViewport.addEventListener('resize', syncViewportHeight);
+  window.visualViewport.addEventListener('scroll', syncViewportHeight);
 }
 
 // ─── Recording ───
