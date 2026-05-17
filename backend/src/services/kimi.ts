@@ -282,6 +282,17 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     switch (name) {
       case 'query_shows': {
         const to = args.to || args.from;
+
+        // If Kimi misclassified a venue abbreviation as program (e.g. "JBT", "TET"),
+        // promote it to venue and clear program so the venue filter kicks in correctly
+        if (args.program && !args.venue) {
+          const pk = venueKey(args.program);
+          if (VENUE_GROUPS.some(g => g.includes(pk))) {
+            args.venue = args.program;
+            args.program = undefined;
+          }
+        }
+
         // Always fetch without venue filter — DB stores venues inconsistently
         // (both abbreviations like TT/LT/JBT and full names), so filter client-side
         const result = (await orchestrator.getShows({ from: args.from, to })) as any;
