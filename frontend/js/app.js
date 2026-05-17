@@ -33,10 +33,7 @@ function init() {
       stopRecording();
       textInp.classList.add('recognized');
       textInp.focus();
-      setTimeout(function() {
-        textInp.classList.remove('recognized');
-        sendMessage();
-      }, 400);
+      setTimeout(function() { textInp.classList.remove('recognized'); }, 400);
     };
 
     recognition.onerror = function(e) {
