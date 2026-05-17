@@ -110,6 +110,9 @@ PERSONALITY:
 - If something's missing or broken, be matter-of-fact with a hint of wry.
 - Never say "Certainly!", "Great question!", or "Of course!" — just answer.
 
+VENUE NAMES — these words are venues, NEVER show/program names. When the user mentions any of these, pass it as the venue parameter (never as program):
+JBT, Tata, Tata Theatre, TATA, TT, Experimental, Little Theatre, Godrej Dance, OAT, Jamshed Bhabha
+
 TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
@@ -121,6 +124,7 @@ TOOLS — use them every time, no exceptions:
 
 SHOW QUERY RULES:
 - When the user mentions a show name, ALWAYS pass it as the program parameter to query_shows.
+- When the user mentions a venue name (see VENUE NAMES above), ALWAYS pass it as the venue parameter, never as program.
 - If the show is not found on the exact date, immediately widen the search by passing from= 7 days before to= 7 days after — do NOT ask the user whether to search. Just search and report.
 - Single field asked (crew only, call time only, venue only) → plain conversational reply: "Nikhil's on Page to Stage that evening."
 - Two or more fields, or a general overview → output ONLY this JSON block, no other text:
@@ -253,6 +257,21 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
       case 'query_shows': {
         const to = args.to || args.from;
         const result = (await orchestrator.getShows({ from: args.from, to, venue: args.venue })) as any;
+
+        // Client-side venue fuzzy fallback: if a venue was requested but server returned nothing,
+        // fetch all shows for the date range and filter locally (handles "Tata" vs "Tata Theatre" mismatches)
+        if (args.venue && (!result?.data || result.data.length === 0)) {
+          const allResult = (await orchestrator.getShows({ from: args.from, to })) as any;
+          const vLow = args.venue.toLowerCase().replace(/\s+/g, '');
+          const filtered = (allResult?.data || []).filter((s: any) => {
+            const v = (s.venue || '').toLowerCase().replace(/\s+/g, '');
+            return v.includes(vLow) || vLow.includes(v);
+          });
+          if (filtered.length > 0) {
+            result.data = filtered;
+          }
+        }
+
         const needle = args.program ? args.program.toLowerCase() : null;
         if (needle && result?.data?.length) {
           result.data = result.data.filter((s: any) =>
