@@ -8,7 +8,9 @@ const micBtn = document.getElementById('mic-btn');
 const textInp = document.getElementById('text-inp');
 const sendBtn = document.getElementById('send-btn');
 
-let recognition = null;
+let mediaRecorder = null;
+let audioChunks = [];
+let recordingStream = null;
 let isRecording = false;
 let messages = [];
 let voiceTimeout = null;
@@ -50,42 +52,7 @@ function init() {
     addMsg('assistant', 'Hey — Eddy here. What do you need?\n\nI can pull up the schedule, check who\'s free, add shows, or build an equipment quote. Just ask normally — no special commands needed.\n\n(Type /clear to wipe the slate.)');
   }
 
-  if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
-    const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
-    recognition = new SR();
-    recognition.continuous = false;
-    recognition.interimResults = false;
-    recognition.lang = 'en-IN';
-
-    recognition.onresult = function(e) {
-      clearTimeout(voiceTimeout);
-      const transcript = e.results[0][0].transcript;
-      textInp.value = transcript;
-      stopRecording();
-      textInp.classList.add('recognized');
-      textInp.focus();
-      setTimeout(function() { textInp.classList.remove('recognized'); }, 400);
-    };
-
-    recognition.onerror = function(e) {
-      clearTimeout(voiceTimeout);
-      stopRecording();
-      var msg = {
-        'not-allowed':  'Mic access denied — check browser permissions.',
-        'no-speech':    null, // silent, user just didn't speak
-        'network':      'Voice recognition needs a network connection.',
-        'aborted':      null, // user cancelled, silent
-        'audio-capture':'No mic found. Plug one in?',
-        'service-not-allowed': 'Voice not allowed in this browser context (try non-PWA mode).',
-      }[e.error] || ('Mic hiccup: ' + e.error);
-      if (msg) addMsg('assistant', msg);
-    };
-
-    recognition.onend = function() {
-      clearTimeout(voiceTimeout);
-      stopRecording();
-    };
-  } else {
+  if (!navigator.mediaDevices || !window.MediaRecorder) {
     micBtn.style.display = 'none';
   }
 }
@@ -117,24 +84,76 @@ micBtn.addEventListener('touchstart', function(e) { e.preventDefault(); startRec
 micBtn.addEventListener('touchend', function(e) { e.preventDefault(); stopRecording(); });
 
 function startRecording() {
-  if (!recognition || isRecording) return;
-  isRecording = true;
-  micBtn.classList.add('recording');
-  try {
-    recognition.start();
-    voiceTimeout = setTimeout(function() {
-      stopRecording();
-    }, 10000); // auto-stop after 10 s
-  } catch(e) {
-    stopRecording();
-  }
+  if (isRecording) return;
+  navigator.mediaDevices.getUserMedia({ audio: true }).then(function(stream) {
+    recordingStream = stream;
+    audioChunks = [];
+
+    var mimeType = ['audio/webm;codecs=opus', 'audio/webm', 'audio/mp4', 'audio/ogg']
+      .find(function(t) { return MediaRecorder.isTypeSupported(t); }) || '';
+
+    mediaRecorder = new MediaRecorder(stream, mimeType ? { mimeType: mimeType } : {});
+    mediaRecorder.ondataavailable = function(e) {
+      if (e.data && e.data.size > 0) audioChunks.push(e.data);
+    };
+    mediaRecorder.start();
+    isRecording = true;
+    micBtn.classList.add('recording');
+    voiceTimeout = setTimeout(stopRecording, 10000);
+  }).catch(function() {
+    addMsg('assistant', 'Mic access denied — check browser permissions.');
+  });
 }
 
 function stopRecording() {
   if (!isRecording) return;
+  clearTimeout(voiceTimeout);
   isRecording = false;
   micBtn.classList.remove('recording');
-  try { recognition.stop(); } catch(e) {}
+  micBtn.classList.add('transcribing');
+
+  if (!mediaRecorder) {
+    micBtn.classList.remove('transcribing');
+    return;
+  }
+
+  mediaRecorder.onstop = function() {
+    var mimeType = mediaRecorder.mimeType || 'audio/webm';
+    var blob = new Blob(audioChunks, { type: mimeType });
+
+    if (recordingStream) {
+      recordingStream.getTracks().forEach(function(t) { t.stop(); });
+      recordingStream = null;
+    }
+
+    if (blob.size < 1000) {
+      // Too short — user just tapped mic without speaking
+      micBtn.classList.remove('transcribing');
+      return;
+    }
+
+    var formData = new FormData();
+    formData.append('audio', blob, 'recording.webm');
+
+    fetch(API_BASE + '/api/transcribe', { method: 'POST', body: formData })
+      .then(function(res) { return res.ok ? res.json() : Promise.reject(res.status); })
+      .then(function(data) {
+        if (data.text && data.text.trim()) {
+          textInp.value = data.text.trim();
+          textInp.classList.add('recognized');
+          textInp.focus();
+          setTimeout(function() { textInp.classList.remove('recognized'); }, 400);
+        }
+      })
+      .catch(function() {
+        addMsg('assistant', 'Transcription failed — try typing instead.');
+      })
+      .finally(function() {
+        micBtn.classList.remove('transcribing');
+      });
+  };
+
+  try { mediaRecorder.stop(); } catch(e) { micBtn.classList.remove('transcribing'); }
 }
 
 // ─── Send ───
