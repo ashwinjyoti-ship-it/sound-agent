@@ -14,10 +14,41 @@ let messages = [];
 let voiceTimeout = null;
 var copyStore = {};
 
+const STORAGE_KEY = 'eddy_msgs';
+const MAX_MSGS = 40;
+
+function saveMessages() {
+  var trimmed = messages.slice(-MAX_MSGS);
+  messages = trimmed;
+  try { localStorage.setItem(STORAGE_KEY, JSON.stringify(trimmed)); } catch(e) {}
+}
+
+function clearMessages() {
+  messages = [];
+  try { localStorage.removeItem(STORAGE_KEY); } catch(e) {}
+}
+
 // ─── Init ───
 function init() {
   syncViewportHeight();
-  addMsg('assistant', 'Hey — Eddy here. What do you need?\n\nI can pull up the schedule, check who\'s free, add shows, or build an equipment quote. Just ask normally — no special commands needed.\n\n(Type /clear to wipe the slate.)');
+
+  var saved = null;
+  try { saved = JSON.parse(localStorage.getItem(STORAGE_KEY) || 'null'); } catch(e) {}
+
+  if (saved && saved.length) {
+    messages = saved;
+    for (var i = 0; i < saved.length; i++) {
+      var m = saved[i];
+      if (m.role === 'user') {
+        addMsg('user', m.content);
+      } else if (m.role === 'assistant') {
+        var structured = tryParseStructured(m.content);
+        if (structured) { renderStructured(structured); } else { addMsg('assistant', m.content); }
+      }
+    }
+  } else {
+    addMsg('assistant', 'Hey — Eddy here. What do you need?\n\nI can pull up the schedule, check who\'s free, add shows, or build an equipment quote. Just ask normally — no special commands needed.\n\n(Type /clear to wipe the slate.)');
+  }
 
   if ('webkitSpeechRecognition' in window || 'SpeechRecognition' in window) {
     const SR = window.SpeechRecognition || window.webkitSpeechRecognition;
@@ -119,7 +150,7 @@ async function sendMessage() {
   // Handle /clear command
   if (text.toLowerCase() === '/clear') {
     chatEl.innerHTML = '';
-    messages = [];
+    clearMessages();
     textInp.value = '';
     addMsg('assistant', 'Cleared. Clean slate.');
     return;
@@ -127,6 +158,7 @@ async function sendMessage() {
 
   addMsg('user', text);
   messages.push({ role: 'user', content: text });
+  saveMessages();
   textInp.value = '';
 
   const loadingId = addLoading();
@@ -150,6 +182,7 @@ async function sendMessage() {
     const data = await res.json();
     const reply = data.reply || 'Got nothing back. The server might be half-asleep.';
     messages.push({ role: 'assistant', content: reply });
+    saveMessages();
 
     const structured = tryParseStructured(reply);
     if (structured) {
