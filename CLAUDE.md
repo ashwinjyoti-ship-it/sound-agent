@@ -5,35 +5,33 @@
 Sound Agent — voice + chat PWA for NCPA Sound Department (shows, crew, quotes).
 
 ```
-Phone (PWA)  →  Render Backend (Node/Express)
-                  ├→ Kimi K2.6 (AI, tool-use loop)
-                  └→ Orchestrator Proxy (Cloudflare Workers)
-                       └→ 3 D1 DBs: DB_SOUND, DB_CREW, QUOTE_BUILDER
+Phone (PWA) → Render Backend (Node/Express)
+               ├→ Kimi K2.6 (AI, tool-use loop)
+               └→ Orchestrator Proxy (Cloudflare Workers)
+                    └→ 3 D1 DBs: DB_SOUND, DB_CREW, QUOTE_BUILDER
 ```
 
 ## Key Files
 
 **Frontend** (`/frontend`) — static HTML/JS, no build step
-- `index.html` — chat UI, inline CSS, safe-area insets, `box-sizing:border-box` global
+- `index.html` — chat UI, inline CSS, safe-area insets
 - `js/app.js` — chat logic, Web Speech API (en-IN), structured response rendering
 - `manifest.json`, `sw.js`, `icon.svg` — PWA boilerplate
 
-**Backend** (`/backend`) — TypeScript, compiled to `dist/`
-- `src/services/kimi.ts` — tool definitions (TOOLS array), tool-use loop, `executeTool()`, `generateEquipmentQuote()`, `getMergedCrewAvailability()`
-- `src/services/orchestrator.ts` — HTTP client for Orchestrator (`X-API-Token` header)
+**Backend** (`/backend`) — TypeScript → `dist/`
+- `src/services/kimi.ts` — TOOLS array, tool-use loop, `executeTool()`, `generateEquipmentQuote()`, `getMergedCrewAvailability()`
+- `src/services/orchestrator.ts` — HTTP client (`X-API-Token` header)
 - `src/routes/chat.ts` — `POST /api/chat`
 - `src/config.ts` — env vars: `KIMI_API_KEY`, `ORCHESTRATOR_TOKEN`, `PORT`, `FRONTEND_URL`
 
 ## AI Tool-Use Loop (`kimi.ts`)
 
-1. Prepend system message (personality + tool rules)
-2. Call Kimi with 5 tools; max 5 loops
-3. On tool calls → `executeTool()` → Orchestrator → result back into messages
-4. On final text:
-   - `generate_quote` success → **force** structured JSON card (backend intercepts)
-   - `get_crew_availability` success → **force** structured JSON card
+1. Prepend system message → call Kimi with 5 tools, max 5 loops
+2. Tool calls → `executeTool()` → Orchestrator → result back into messages
+3. Final text intercepts:
+   - `generate_quote` success → force JSON quote card
+   - `get_crew_availability` success → force JSON crew card
    - `query_shows` → Kimi decides (plain text for single field, JSON card for ≥2 fields)
-   - Everything else → Kimi's natural response
 
 **Forced JSON shapes:**
 ```json
@@ -41,42 +39,48 @@ Phone (PWA)  →  Render Backend (Node/Express)
 { "type": "shows", "shows": [{ "event_date":"","program":"","venue":"","call_time":"","crew":"" }] }
 { "type": "crew_availability", "date":"", "available":[], "assigned":[], "unavailable":[], "conflicts":[] }
 ```
-Frontend parses these from ` ```json ``` ` blocks and renders structured cards.
+Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
 
 ## Tools
 
 | Tool | Params | Notes |
 |------|--------|-------|
-| `query_shows` | `from`, `to?`, `venue?`, `program?` | If `program` set + 0 results → auto ±7 day search |
+| `query_shows` | `from`, `to?`, `venue?`, `program?` | 0 results + program → auto ±7 day search |
 | `add_show` | `event_date`, `program`, `venue`, + optionals | |
-| `update_show` | `id` (required), patch fields | Must `query_shows` first to get id; confirm if field already has data |
-| `get_crew_availability` | `date` | Merges crew DB + unavailability + assigned from shows |
-| `generate_quote` | `items[]` | Fuzzy-matches against QUOTE_BUILDER DB, calls Orchestrator |
+| `update_show` | `id` (required), patch fields | Must `query_shows` first; confirm before overwriting |
+| `get_crew_availability` | `date` | Merges crew DB + unavailability + shows |
+| `generate_quote` | `items[]` | Fuzzy-matches QUOTE_BUILDER DB |
 
-## AI Personality / Prompt Rules (kimi.ts system message)
+## AI Personality / Prompt Rules
 
-- Tone: sharp backstage colleague, concise, dry humour, no "Certainly!"
-- No markdown in responses
-- Update flow: search first (no venue question), show existing data, confirm before overwriting
-- Quote: always emit JSON card, never summarise in text
+- Sharp backstage colleague; concise, dry humour; no "Certainly!"
+- No markdown; plain text only
+- Update flow: search → show existing data → confirm before overwriting
+- Quote: always emit JSON card, never text summary
 - Show query: plain text for single field; JSON card for ≥2 fields
-- Nearby search: if named show not found on date, widen ±7 days automatically — don't ask
+- Nearby search: widen ±7 days automatically if show not found — don't ask
 
 ## Frontend Rendering (`app.js`)
 
 - `tryParseStructured()` — extracts JSON from ` ```json ``` ` blocks
-- `renderQuote()` — quote table card + **Copy Quote** button
-  - Copy uses `copyStore{}` keyed by `q-<timestamp>` (avoids onclick attribute quoting bugs)
-  - `copyQuoteRichText()` uses `ClipboardItem` with `text/html` + `text/plain` for rich paste in email; falls back to `writeText()`
-- `renderShowList()` — stacked card layout (no table), date + program on one line
+- `fmtDate(YYYY-MM-DD)` → `dd/mm/yy`; `fmtTime24(t)` → 24hr normalisation (IST display)
+- `renderQuote()` — quote table + **Copy Quote** (rich HTML + plain-text clipboard)
+  - `copyStore{}` keyed by `q-<timestamp>` avoids onclick quoting bugs
+- `renderShowList()` — stacked card, date as `dd/mm/yy`, call_time normalised to 24hr
 - `renderCrewPicker()` — FOH single-select + stage multi-select pills; assigns via chat message
-- Voice: hold-to-talk mic, 10 s timeout, per-error messages (`not-allowed`, `network`, `audio-capture`, etc.)
+- Voice: hold-to-talk, 10 s timeout, per-error messages
 
 ## Layout / Mobile Notes
 
-- `.page` padding uses `max(16px, env(safe-area-inset-*))` — handles Comet/Chrome/Safari
-- `.page` and `.card-in-msg` both have `overflow-x:hidden` to prevent horizontal scroll on iOS
-- State is per-browser-tab (`messages[]` array); backend is stateless. Two phones = independent conversations sharing the same DB.
+- `.page` padding: `max(16px, env(safe-area-inset-*))` — Comet/Chrome/Safari
+- `.page` and `.card-in-msg` have `overflow-x:hidden` — prevents iOS horizontal scroll
+- State: per-browser-tab `messages[]`; backend stateless. Two phones = independent sessions, shared DB.
+
+## Timezone & Formats
+
+- Backend `today` uses IST (UTC+5:30) via `Date.now() + 330*60*1000`
+- Display dates: `dd/mm/yy` via `fmtDate()`
+- Display times: 24hr via `fmtTime24()` (handles "5:30pm" → "17:30")
 
 ## Dev Commands
 
@@ -87,11 +91,11 @@ npm run dev        # watch mode
 npm run build      # tsc → dist/
 npm start
 
-# Frontend — no build, just serve
+# Frontend — no build
 cd frontend && python3 -m http.server 5173
-# For local API: set API_BASE = 'http://localhost:3000' in app.js
+# Local API: set API_BASE = 'http://localhost:3000' in app.js
 
-# Test chat
+# Test
 curl -X POST http://localhost:3000/api/chat \
   -H 'Content-Type: application/json' \
   -d '{"messages":[{"role":"user","content":"Hi"}]}'
@@ -99,12 +103,12 @@ curl -X POST http://localhost:3000/api/chat \
 
 ## Deployment
 
-- **Frontend**: Cloudflare Pages, auto-deploy on push to `main`
-- **Backend**: Render, root=`backend/`, build=`npm install && npm run build`, start=`npm start`
+- **Frontend**: Cloudflare Pages, auto-deploy on `main`
+- **Backend**: Render; root=`backend/`, build=`npm install && npm run build`, start=`npm start`
 
 ## Adding a Tool
 
-1. Add to `TOOLS` array in `kimi.ts`
+1. Add to `TOOLS` in `kimi.ts`
 2. Add case in `executeTool()` switch
 3. Call Orchestrator via `orchestrator` client
 4. If result needs a forced card, add intercept in the "no tool calls" branch

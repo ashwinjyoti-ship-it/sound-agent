@@ -93,8 +93,9 @@ const TOOLS = [
 ];
 
 export async function chatWithKimi(messages: any[], orchestrator: OrchestratorClient): Promise<string> {
-  const today = new Date().toISOString().slice(0, 10);
-  const currentYear = new Date().getFullYear();
+  const nowIST = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
+  const today = nowIST.toISOString().slice(0, 10);
+  const currentYear = nowIST.getUTCFullYear();
 
   // Prepend system message instructing Kimi to use tools
   const systemMessage = {
