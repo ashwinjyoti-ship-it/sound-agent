@@ -2,6 +2,7 @@ import express from 'express';
 import cors from 'cors';
 import { PORT, FRONTEND_URL } from './config';
 import { chatRoute } from './routes/chat';
+import { transcribeRoute } from './routes/transcribe';
 
 const app = express();
 
@@ -21,6 +22,9 @@ app.get('/health', (_req, res) => {
 
 // Main chat endpoint
 app.use('/api/chat', chatRoute);
+
+// OpenAI Whisper transcription
+app.use('/api/transcribe', transcribeRoute);
 
 // 404
 app.use((_req, res) => {
