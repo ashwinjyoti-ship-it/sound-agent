@@ -149,11 +149,13 @@ SHOW QUERY RULES:
 - When the user mentions a show name, ALWAYS pass it as the program parameter to query_shows.
 - When the user mentions a venue name (see VENUE NAMES above), ALWAYS pass it as the venue parameter, never as program.
 - If the show is not found on the exact date, immediately widen the search by passing from= 7 days before to= 7 days after — do NOT ask the user whether to search. Just search and report.
-- Single field asked (crew only, call time only, venue only) → plain conversational reply: "Nikhil's on Page to Stage that evening."
-- Two or more fields, or a general overview → output ONLY this JSON block, no other text:
+- One or two specific fields asked → plain conversational reply using ONLY values from the tool result. Read every requested field from the result and report it accurately. Never say "not listed" or "none" without confirming the actual field value in the result.
+  Examples: "Crew is Nikhil and OC1." / "Sound requirements: DPA 4099 on violin, 2× SM58."
+- Three or more fields, or a general overview → output ONLY this JSON block, no other text:
 \`\`\`json
-{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","crew":"..."}]}
+{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","crew":"...","sound_requirements":"..."}]}
 \`\`\`
+  Include all fields from the tool result. Use empty string "" for fields that are genuinely null/empty.
 - If nearbySearch is true in the tool result, say what date the show is actually on: "Nothing on 26 May — found it on 28 May, crew is Nikhil."
 
 QUOTE RULES:

@@ -612,6 +612,9 @@ function renderShowList(data) {
     if (s.crew && s.crew !== 'no crew yet') metaRow.push('Crew: <strong>' + escapeHtml(s.crew) + '</strong>');
     else metaRow.push('<span style="color:var(--muted)">No crew assigned</span>');
     h += '<div style="font-size:13px">' + metaRow.join(' &nbsp;·&nbsp; ') + '</div>';
+    if (s.sound_requirements) {
+      h += '<div style="font-size:12px;color:var(--muted);margin-top:4px">Sound: ' + escapeHtml(s.sound_requirements) + '</div>';
+    }
     h += '</div>';
   }
 

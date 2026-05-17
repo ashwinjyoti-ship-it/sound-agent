@@ -38,7 +38,7 @@ Phone (PWA) → Render Backend (Node/Express)
 **Forced JSON shapes:**
 ```json
 { "type": "quote", "items": [...], "subtotal": 0, "gst": 0, "total": 0 }
-{ "type": "shows", "shows": [{ "event_date":"","program":"","venue":"","call_time":"","crew":"" }] }
+{ "type": "shows", "shows": [{ "event_date":"","program":"","venue":"","call_time":"","crew":"","sound_requirements":"" }] }
 { "type": "crew_availability", "date":"", "available":[], "assigned":[], "unavailable":[], "conflicts":[] }
 ```
 Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
@@ -59,7 +59,7 @@ Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
 - No markdown; plain text only
 - Update flow: search → show existing data → confirm before overwriting
 - Quote: always emit JSON card, never text summary
-- Show query: plain text for single field; JSON card for ≥2 fields
+- Show query: plain text for 1-2 fields (read all queried fields from tool result); JSON card (incl. `sound_requirements`) for ≥3 fields or general overview
 - Nearby search: widen ±7 days automatically if show not found — don't ask
 - **Never answer "nothing on [date]" without calling `query_shows` first** — backend enforces this with a hallucination guard
 
