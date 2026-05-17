@@ -311,13 +311,15 @@ function renderStructured(data) {
   scrollToBottom();
 
   if (data.type === 'crew_availability') {
-    attachCrewListeners(data);
+    attachCrewListeners(data, div);
   }
 }
 
 function renderCrewPicker(data) {
   const date = data.date || 'selected date';
-  let h = '<div><strong>Crew for ' + escapeHtml(fmtDate(date)) + '</strong></div>';
+  const pid = 'cp-' + Date.now();
+  let h = '<div class="crew-picker-root" data-pid="' + pid + '">';
+  h += '<div><strong>Crew for ' + escapeHtml(fmtDate(date)) + '</strong></div>';
 
   if (data.conflicts && data.conflicts.length) {
     h += '<div class="card-in-msg" style="background:var(--warn-bg);border-color:var(--warn-border)">' +
@@ -331,7 +333,7 @@ function renderCrewPicker(data) {
   }
 
   if (!data.available || !data.available.length) {
-    h += '<div class="no-crew">😔 No crew available.</div>';
+    h += '<div class="no-crew">😔 No crew available.</div></div>';
     return h;
   }
 
@@ -339,23 +341,23 @@ function renderCrewPicker(data) {
 
   h += '<div class="role-hdr"><span class="role-label">FOH Engineer</span><span class="role-badge badge-foh">Single select</span></div>' +
     '<p class="role-hint">Pick one FOH engineer.</p>' +
-    '<div class="pill-grid" id="foh-grid">' +
+    '<div class="pill-grid">' +
     data.available.map(function(name) {
-      return '<div class="cpill foh-pill"><input type="radio" name="foh" id="foh-' + sid(name) + '" value="' + escapeHtml(name) + '">' +
-        '<label for="foh-' + sid(name) + '">' + escapeHtml(name) + '</label></div>';
+      return '<div class="cpill foh-pill"><input type="radio" name="foh-' + pid + '" value="' + escapeHtml(name) + '">' +
+        '<label>' + escapeHtml(name) + '</label></div>';
     }).join('') +
-    '<div class="cpill foh-pill none-pill"><input type="radio" name="foh" id="foh-none" value="" checked>' +
-    '<label for="foh-none">None / TBD</label></div>' +
+    '<div class="cpill foh-pill none-pill"><input type="radio" name="foh-' + pid + '" value="" checked>' +
+    '<label>None / TBD</label></div>' +
     '</div>';
 
   h += '<div class="divider"></div>';
 
   h += '<div class="role-hdr"><span class="role-label">Stage Crew</span><span class="role-badge badge-stage">Multi select</span></div>' +
     '<p class="role-hint">Pick one or more stage crew.</p>' +
-    '<div class="pill-grid" id="stage-grid">' +
+    '<div class="pill-grid">' +
     data.available.map(function(name) {
-      return '<div class="cpill stage-pill"><input type="checkbox" name="stage" id="stage-' + sid(name) + '" value="' + escapeHtml(name) + '">' +
-        '<label for="stage-' + sid(name) + '">' + escapeHtml(name) + '</label></div>';
+      return '<div class="cpill stage-pill"><input type="checkbox" name="stage-' + pid + '" value="' + escapeHtml(name) + '">' +
+        '<label>' + escapeHtml(name) + '</label></div>';
     }).join('') +
     '</div>';
 
@@ -379,24 +381,28 @@ function renderCrewPicker(data) {
   h += '</div>';
 
   h += '<div style="display:flex;gap:8px;margin-top:10px">' +
-    '<button class="copy-btn" id="btn-assign">✓ Assign Crew</button>' +
-    '<button class="copy-btn" style="background:var(--muted)" id="btn-skip">Skip for now</button>' +
+    '<button class="copy-btn btn-assign">✓ Assign Crew</button>' +
+    '<button class="copy-btn btn-skip" style="background:var(--muted)">Skip for now</button>' +
     '</div>';
 
+  h += '</div>';
   return h;
 }
 
-function attachCrewListeners(data) {
+function attachCrewListeners(data, container) {
   var date = data.date;
+  var root = container.querySelector('.crew-picker-root');
+  if (!root) return;
+
+  var fohName = root.dataset.pid ? 'foh-' + root.dataset.pid : 'foh';
+  var stageName = root.dataset.pid ? 'stage-' + root.dataset.pid : 'stage';
 
   function syncStageVisibility(selectedFohValue) {
-    data.available.forEach(function(name) {
-      var stagePill = document.getElementById('stage-' + sid(name));
-      if (!stagePill) return;
-      var pill = stagePill.closest('.cpill');
+    root.querySelectorAll('input[name="' + stageName + '"]').forEach(function(el) {
+      var pill = el.closest('.cpill');
       if (!pill) return;
-      if (name === selectedFohValue) {
-        stagePill.checked = false;
+      if (el.value === selectedFohValue) {
+        el.checked = false;
         pill.style.display = 'none';
       } else {
         pill.style.display = '';
@@ -404,30 +410,30 @@ function attachCrewListeners(data) {
     });
   }
 
-  document.querySelectorAll('input[name="foh"]').forEach(function(el) {
+  root.querySelectorAll('input[name="' + fohName + '"]').forEach(function(el) {
     el.addEventListener('change', function() {
-      syncStageVisibility(el.value); // empty string when None/TBD
+      syncStageVisibility(el.value);
     });
   });
 
-  document.querySelectorAll('input[name="stage"]').forEach(function(el) {
+  root.querySelectorAll('input[name="' + stageName + '"]').forEach(function(el) {
     el.addEventListener('change', function() {
       if (!el.checked) return;
-      var fohRadio = document.querySelector('input[name="foh"]:checked');
+      var fohRadio = root.querySelector('input[name="' + fohName + '"]:checked');
       if (fohRadio && fohRadio.value === el.value) {
-        var noneRadio = document.getElementById('foh-none');
+        var noneRadio = root.querySelector('input[name="' + fohName + '"][value=""]');
         if (noneRadio) noneRadio.checked = true;
         syncStageVisibility('');
       }
     });
   });
 
-  var assignBtn = document.getElementById('btn-assign');
+  var assignBtn = root.querySelector('.btn-assign');
   if (assignBtn) {
     assignBtn.addEventListener('click', function() {
-      var fohEl = document.querySelector('input[name="foh"]:checked');
+      var fohEl = root.querySelector('input[name="' + fohName + '"]:checked');
       var foh = fohEl ? fohEl.value : '';
-      var stageEls = document.querySelectorAll('input[name="stage"]:checked');
+      var stageEls = root.querySelectorAll('input[name="' + stageName + '"]:checked');
       var stage = Array.from(stageEls).map(function(e) { return e.value; }).filter(Boolean);
 
       var msg = 'Assign crew for ' + date + ': FOH=' + (foh || 'TBD') + ', Stage=' + (stage.join(', ') || 'TBD');
@@ -436,7 +442,7 @@ function attachCrewListeners(data) {
     });
   }
 
-  var skipBtn = document.getElementById('btn-skip');
+  var skipBtn = root.querySelector('.btn-skip');
   if (skipBtn) {
     skipBtn.addEventListener('click', function() {
       addMsg('assistant', 'Crew assignment skipped. You can assign later by saying "Assign crew to [show]."');
