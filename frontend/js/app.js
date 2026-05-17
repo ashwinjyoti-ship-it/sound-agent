@@ -265,7 +265,7 @@ function renderStructured(data) {
 
 function renderCrewPicker(data) {
   const date = data.date || 'selected date';
-  let h = '<div><strong>Crew for ' + escapeHtml(date) + '</strong></div>';
+  let h = '<div><strong>Crew for ' + escapeHtml(fmtDate(date)) + '</strong></div>';
 
   if (data.conflicts && data.conflicts.length) {
     h += '<div class="card-in-msg" style="background:var(--warn-bg);border-color:var(--warn-border)">' +
@@ -547,10 +547,7 @@ function renderShowList(data) {
 
   for (var k = 0; k < shows.length; k++) {
     var s = shows[k];
-    var dateStr = s.event_date ? s.event_date.replace(/^(\d{4})-(\d{2})-(\d{2})$/, function(_, y, m, d) {
-      var months = ['Jan','Feb','Mar','Apr','May','Jun','Jul','Aug','Sep','Oct','Nov','Dec'];
-      return d + ' ' + months[parseInt(m, 10) - 1] + ' ' + y;
-    }) : '—';
+    var dateStr = fmtDate(s.event_date);
     var borderTop = k > 0 ? 'border-top:1px solid var(--border);margin-top:10px;padding-top:10px' : '';
     h += '<div style="' + borderTop + '">';
     h += '<div style="display:flex;justify-content:space-between;align-items:baseline;margin-bottom:3px">';
@@ -559,7 +556,7 @@ function renderShowList(data) {
     h += '</div>';
     h += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + escapeHtml(s.venue || 'Venue TBD') + '</div>';
     var metaRow = [];
-    if (s.call_time) metaRow.push('Call: <strong>' + escapeHtml(s.call_time) + '</strong>');
+    if (s.call_time) metaRow.push('Call: <strong>' + escapeHtml(fmtTime24(s.call_time)) + '</strong>');
     if (s.crew && s.crew !== 'no crew yet') metaRow.push('Crew: <strong>' + escapeHtml(s.crew) + '</strong>');
     else metaRow.push('<span style="color:var(--muted)">No crew assigned</span>');
     h += '<div style="font-size:13px">' + metaRow.join(' &nbsp;·&nbsp; ') + '</div>';
@@ -570,6 +567,27 @@ function renderShowList(data) {
 }
 
 // ─── Helpers ───
+function fmtDate(dateStr) {
+  if (!dateStr) return '—';
+  var m = dateStr.match(/^(\d{4})-(\d{2})-(\d{2})$/);
+  if (!m) return dateStr;
+  return m[3] + '/' + m[2] + '/' + m[1].slice(2);
+}
+
+function fmtTime24(t) {
+  if (!t) return t;
+  if (/^\d{1,2}:\d{2}$/.test(t.trim())) {
+    var parts = t.trim().split(':');
+    return parts[0].padStart(2, '0') + ':' + parts[1];
+  }
+  var m = t.trim().match(/^(\d{1,2})(?::(\d{2}))?\s*(am|pm)$/i);
+  if (!m) return t;
+  var h = parseInt(m[1]), min = m[2] ? parseInt(m[2]) : 0;
+  if (m[3].toLowerCase() === 'pm' && h !== 12) h += 12;
+  if (m[3].toLowerCase() === 'am' && h === 12) h = 0;
+  return String(h).padStart(2, '0') + ':' + String(min).padStart(2, '0');
+}
+
 function escapeHtml(s) {
   if (!s) return '';
   return String(s).replace(/&/g, '&amp;').replace(/</g, '&lt;').replace(/>/g, '&gt;').replace(/"/g, '&quot;');
