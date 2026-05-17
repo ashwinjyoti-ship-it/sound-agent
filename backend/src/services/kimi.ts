@@ -203,6 +203,16 @@ FORMATTING:
 
     // No tool calls — return Kimi's natural response, or force structured JSON where needed
     if (!message.tool_calls || message.tool_calls.length === 0) {
+      // Guard: if AI skipped tools on loop 0 and looks like it said "nothing found",
+      // it hallucinated — force it to actually call query_shows before answering.
+      if (loop === 0 && lastToolName === null) {
+        const replyLower = (message.content || '').toLowerCase();
+        if (/nothing on|no shows?|no events?|don't see|can't find|not found|check.*?side\??|search.*?side\??/i.test(replyLower)) {
+          currentMessages.push({ role: 'assistant', content: message.content });
+          currentMessages.push({ role: 'user', content: 'You must call query_shows before answering — check the database now.' });
+          continue;
+        }
+      }
       // Always force quote card — Kimi must not summarise a quote in text
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
         const normalizedItems = (lastToolResult.items || []).map((it: any) => ({

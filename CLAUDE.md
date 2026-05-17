@@ -19,7 +19,7 @@ Phone (PWA) → Render Backend (Node/Express)
 - `manifest.json`, `sw.js`, `icon.svg` — PWA boilerplate
 
 **Backend** (`/backend`) — TypeScript → `dist/`
-- `src/services/kimi.ts` — TOOLS array, tool-use loop, `executeTool()`, `generateEquipmentQuote()`, `getMergedCrewAvailability()`
+- `src/services/kimi.ts` — TOOLS array, tool-use loop, `executeTool()`, helpers
 - `src/services/orchestrator.ts` — HTTP client (`X-API-Token` header)
 - `src/routes/chat.ts` — `POST /api/chat`
 - `src/config.ts` — env vars: `KIMI_API_KEY`, `ORCHESTRATOR_TOKEN`, `PORT`, `FRONTEND_URL`
@@ -32,6 +32,8 @@ Phone (PWA) → Render Backend (Node/Express)
    - `generate_quote` success → force JSON quote card
    - `get_crew_availability` success → force JSON crew card
    - `query_shows` → Kimi decides (plain text for single field, JSON card for ≥2 fields)
+
+**Hallucination guard (loop 0):** If the AI returns no tool call on the first iteration and the response matches "nothing on / no shows / can't find / check either side" patterns, the backend injects a correction message and retries — forcing a `query_shows` call before any answer is returned.
 
 **Forced JSON shapes:**
 ```json
@@ -59,6 +61,7 @@ Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
 - Quote: always emit JSON card, never text summary
 - Show query: plain text for single field; JSON card for ≥2 fields
 - Nearby search: widen ±7 days automatically if show not found — don't ask
+- **Never answer "nothing on [date]" without calling `query_shows` first** — backend enforces this with a hallucination guard
 
 ## Frontend Rendering (`app.js`)
 
