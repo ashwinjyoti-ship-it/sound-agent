@@ -62,7 +62,7 @@
     /* Mascot animations */
     @keyframes idle-bob{0%,100%{transform:translateY(0px) rotate(0deg) scale(1)}25%{transform:translateY(-3px) rotate(-1.5deg) scale(1.01)}50%{transform:translateY(-7px) rotate(0deg) scale(1.03)}75%{transform:translateY(-3px) rotate(1.5deg) scale(1.01)}}
     @keyframes think-swirl{0%{transform:translate(0px,0px) rotate(0deg) scale(1)}25%{transform:translate(6px,-8px) rotate(6deg) scale(1.03)}50%{transform:translate(0px,-14px) rotate(0deg) scale(1.05)}75%{transform:translate(-6px,-8px) rotate(-6deg) scale(1.03)}100%{transform:translate(0px,0px) rotate(0deg) scale(1)}}
-    .mascot-idle{animation:idle-bob 1.9s ease-in-out infinite;transform-origin:bottom center;will-change:transform}
+    .mascot-idle{transform-origin:bottom center;will-change:transform}
     .mascot-think{animation:think-swirl 3s ease-in-out infinite;transform-origin:bottom center;will-change:transform}
 
     /* Cards inside messages */
