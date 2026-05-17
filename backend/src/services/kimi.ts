@@ -110,6 +110,14 @@ PERSONALITY:
 - If something's missing or broken, be matter-of-fact with a hint of wry.
 - Never say "Certainly!", "Great question!", or "Of course!" — just answer.
 
+VENUE NAMES — these words are venues, NEVER show/program names. When the user mentions any of these, pass it as the venue parameter (never as program):
+TT, Tata, Tata Theatre, TATA — all mean Tata Theatre (main stage)
+TET, Experimental, Experimental Theatre — all mean Tata Experimental Theatre
+LT, Little Theatre — Little Theatre
+JBT, Jamshed Bhabha, Jamshed Bhabha Theatre — Jamshed Bhabha Theatre
+GDT, Godrej, Godrej Dance, Godrej Dance Theatre — Godrej Dance Theatre
+Pass the user's shorthand as-is in the venue parameter; the backend resolves aliases.
+
 TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
@@ -121,6 +129,7 @@ TOOLS — use them every time, no exceptions:
 
 SHOW QUERY RULES:
 - When the user mentions a show name, ALWAYS pass it as the program parameter to query_shows.
+- When the user mentions a venue name (see VENUE NAMES above), ALWAYS pass it as the venue parameter, never as program.
 - If the show is not found on the exact date, immediately widen the search by passing from= 7 days before to= 7 days after — do NOT ask the user whether to search. Just search and report.
 - Single field asked (crew only, call time only, venue only) → plain conversational reply: "Nikhil's on Page to Stage that evening."
 - Two or more fields, or a general overview → output ONLY this JSON block, no other text:
@@ -242,6 +251,27 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     return { error: 'Invalid arguments JSON' };
   }
 
+  // Venue alias groups — each array lists all DB values + user shorthands for one physical venue
+  const VENUE_GROUPS: string[][] = [
+    ['tt', 'tata', 'tatatheatre', 'tatamainstage'],
+    ['tet', 'experimental', 'experimentaltheatre', 'tataexperimental', 'tataexperimentaltheatre'],
+    ['lt', 'littletheatre', 'little'],
+    ['jbt', 'jamshedbhabha', 'jamshedbhabhatheatre'],
+    ['gdt', 'godrej', 'godrejdance', 'godrejdancetheatre'],
+  ];
+
+  function venueKey(v: string): string {
+    return (v || '').toLowerCase().replace(/[^a-z0-9]/g, '');
+  }
+
+  function venueMatches(dbVenue: string, query: string): boolean {
+    const dk = venueKey(dbVenue);
+    const qk = venueKey(query);
+    if (dk === qk) return true;
+    if (dk.includes(qk) || qk.includes(dk)) return true;
+    return VENUE_GROUPS.some(g => g.includes(dk) && g.includes(qk));
+  }
+
   function matchesProgram(program: string, needle: string): boolean {
     const hay = (program || '').toLowerCase();
     const words = needle.split(/\s+/).filter(w => w.length >= 3);
@@ -252,7 +282,14 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
     switch (name) {
       case 'query_shows': {
         const to = args.to || args.from;
-        const result = (await orchestrator.getShows({ from: args.from, to, venue: args.venue })) as any;
+        // Always fetch without venue filter — DB stores venues inconsistently
+        // (both abbreviations like TT/LT/JBT and full names), so filter client-side
+        const result = (await orchestrator.getShows({ from: args.from, to })) as any;
+
+        if (args.venue && result?.data?.length) {
+          result.data = result.data.filter((s: any) => venueMatches(s.venue, args.venue));
+        }
+
         const needle = args.program ? args.program.toLowerCase() : null;
         if (needle && result?.data?.length) {
           result.data = result.data.filter((s: any) =>
@@ -265,7 +302,7 @@ async function executeTool(toolCall: any, orchestrator: OrchestratorClient): Pro
           const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
           const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
           const fmt = (d: Date) => d.toISOString().slice(0, 10);
-          const wider = (await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo), venue: args.venue })) as any;
+          const wider = (await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo) })) as any;
           if (wider?.data?.length) {
             wider.data = wider.data.filter((s: any) =>
               matchesProgram(s.program, needle)
