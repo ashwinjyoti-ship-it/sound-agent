@@ -6,10 +6,13 @@
   <meta name="theme-color" content="#D47A31">
   <meta name="apple-mobile-web-app-capable" content="yes">
   <meta name="apple-mobile-web-app-status-bar-style" content="black-translucent">
-  <meta name="apple-mobile-web-app-title" content="Sound Agent">
-  <title>Sound Agent — NCPA</title>
+  <meta name="apple-mobile-web-app-title" content="Ask Eddy">
+  <title>Ask Eddy — NCPA Sound</title>
   <link rel="manifest" href="manifest.json">
   <link rel="apple-touch-icon" href="icon.svg">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Lora:ital,wght@1,400;1,700&display=swap" rel="stylesheet">
   <style>
     *,*::before,*::after{box-sizing:border-box;margin:0;padding:0}
     :root{
@@ -43,11 +46,15 @@
       position:relative;z-index:50;flex:0 0 auto;
       background:linear-gradient(135deg,#323639 0%,#1E2022 100%);
       border-bottom:3px solid var(--primary);
-      padding:calc(14px + var(--safe-top)) 20px 16px;
-      color:#fff;box-shadow:0 2px 20px rgba(30,32,34,0.40);text-align:center;
+      padding:calc(12px + var(--safe-top)) 20px 14px;
+      color:#fff;box-shadow:0 2px 20px rgba(30,32,34,0.40);
     }
-    .app-bar h1{font-size:20px;font-weight:700;letter-spacing:-.2px}
-    .app-bar p{font-size:12px;opacity:.60;margin-top:2px}
+    .app-bar-inner{display:flex;align-items:center;gap:14px;max-width:640px;margin:0 auto}
+    .header-mascot{height:50px;width:auto;flex-shrink:0;display:block}
+    .app-bar h1{font-family:'Lora',Georgia,serif;font-style:italic;font-size:26px;font-weight:700;line-height:1.1;letter-spacing:-.3px}
+    .ask-word{font-weight:400;color:rgba(255,255,255,0.72)}
+    .eddy-word{font-weight:700;color:var(--primary)}
+    .app-bar p{font-size:11px;opacity:.55;margin-top:3px;letter-spacing:.2px}
 
     .page{width:100%;max-width:640px;margin:0 auto;flex:1 1 auto;min-height:0;padding:16px max(16px, env(safe-area-inset-right, 0px)) calc(80px + env(safe-area-inset-bottom, 0px)) max(16px, env(safe-area-inset-left, 0px));overflow-x:hidden;overflow-y:auto;-webkit-overflow-scrolling:touch;overscroll-behavior:contain}
 
@@ -55,9 +62,12 @@
     .msg{display:flex;gap:10px;margin-bottom:14px;animation:fadeIn .25s ease}
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .msg-avatar-user{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--primary-light);color:#fff;align-self:flex-start;margin-top:4px}
-    .msg-avatar-sa{width:70px;flex-shrink:0;display:flex;align-items:flex-end;justify-content:center;overflow:visible;align-self:flex-end}
-    .msg-body{flex:1;background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:var(--shadow);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;max-width:100%}
+    .msg-avatar-sa{width:90px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;overflow:visible;align-self:flex-start;padding-top:4px}
+    .msg-body{position:relative;flex:1;background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:var(--shadow);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;max-width:100%}
     .msg-user .msg-body{background:rgba(212,122,49,.07)}
+    /* Speech bubble tail pointing left toward Eddy */
+    .msg-sa .msg-body::before{content:'';position:absolute;left:-10px;top:14px;width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-right:10px solid rgba(212,122,49,0.28)}
+    .msg-sa .msg-body::after{content:'';position:absolute;left:-8px;top:15px;width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-right:9px solid #FEF7ED}
 
     /* Mascot animations */
     @keyframes idle-bob{0%,100%{transform:translateY(0px) rotate(0deg) scale(1)}25%{transform:translateY(-3px) rotate(-1.5deg) scale(1.01)}50%{transform:translateY(-7px) rotate(0deg) scale(1.03)}75%{transform:translateY(-3px) rotate(1.5deg) scale(1.01)}}
@@ -129,8 +139,13 @@
 </head>
 <body>
   <header class="app-bar">
-    <h1>Sound Agent</h1>
-    <p>NCPA Sound Department</p>
+    <div class="app-bar-inner">
+      <img src="/images/mascot.png" alt="Eddy" class="header-mascot">
+      <div>
+        <h1><span class="ask-word">Ask</span> <span class="eddy-word">Eddy</span></h1>
+        <p>NCPA Sound Department</p>
+      </div>
+    </div>
   </header>
 
   <div class="page">
