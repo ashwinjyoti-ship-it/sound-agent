@@ -153,9 +153,9 @@ SHOW QUERY RULES:
   Examples: "Crew is Nikhil and OC1." / "Sound requirements: DPA 4099 on violin, 2× SM58."
 - Three or more fields, or a general overview → output ONLY this JSON block, no other text:
 \`\`\`json
-{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","crew":"...","sound_requirements":"..."}]}
+{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","foh_crew":"...","stage_crew":"...","sound_requirements":"..."}]}
 \`\`\`
-  Include all fields from the tool result. Use empty string "" for fields that are genuinely null/empty.
+  Populate foh_crew and stage_crew from the tool result's foh_crew/stage_crew fields. Use empty string "" for fields that are genuinely null/empty.
 - If nearbySearch is true in the tool result, say what date the show is actually on: "Nothing on 26 May — found it on 28 May, crew is Nikhil."
 
 QUOTE RULES:

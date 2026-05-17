@@ -609,8 +609,17 @@ function renderShowList(data) {
     h += '<div style="font-size:12px;color:var(--muted);margin-bottom:4px">' + escapeHtml(s.venue || 'Venue TBD') + '</div>';
     var metaRow = [];
     if (s.call_time) metaRow.push('Call: <strong>' + escapeHtml(fmtTime24(s.call_time)) + '</strong>');
-    if (s.crew && s.crew !== 'no crew yet') metaRow.push('Crew: <strong>' + escapeHtml(s.crew) + '</strong>');
-    else metaRow.push('<span style="color:var(--muted)">No crew assigned</span>');
+    var hasCrew = s.foh_crew || s.stage_crew || (s.crew && s.crew !== 'no crew yet');
+    if (hasCrew) {
+      if (s.foh_crew || s.stage_crew) {
+        if (s.foh_crew) metaRow.push('FOH: <strong>' + escapeHtml(s.foh_crew) + '</strong>');
+        if (s.stage_crew) metaRow.push('Stage: <strong>' + escapeHtml(s.stage_crew) + '</strong>');
+      } else {
+        metaRow.push('Crew: <strong>' + escapeHtml(s.crew) + '</strong>');
+      }
+    } else {
+      metaRow.push('<span style="color:var(--muted)">No crew assigned</span>');
+    }
     h += '<div style="font-size:13px">' + metaRow.join(' &nbsp;·&nbsp; ') + '</div>';
     if (s.sound_requirements) {
       h += '<div style="font-size:12px;color:var(--muted);margin-top:4px">Sound: ' + escapeHtml(s.sound_requirements) + '</div>';

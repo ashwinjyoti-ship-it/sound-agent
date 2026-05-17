@@ -38,7 +38,7 @@ Phone (PWA) → Render Backend (Node/Express)
 **Forced JSON shapes:**
 ```json
 { "type": "quote", "items": [...], "subtotal": 0, "gst": 0, "total": 0 }
-{ "type": "shows", "shows": [{ "event_date":"","program":"","venue":"","call_time":"","crew":"","sound_requirements":"" }] }
+{ "type": "shows", "shows": [{ "event_date":"","program":"","venue":"","call_time":"","foh_crew":"","stage_crew":"","sound_requirements":"" }] }
 { "type": "crew_availability", "date":"", "available":[], "assigned":[], "unavailable":[], "conflicts":[] }
 ```
 Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
