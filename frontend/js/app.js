@@ -343,11 +343,12 @@ function renderCrewPicker(data) {
     '<p class="role-hint">Pick one FOH engineer.</p>' +
     '<div class="pill-grid">' +
     data.available.map(function(name) {
-      return '<div class="cpill foh-pill"><input type="radio" name="foh-' + pid + '" value="' + escapeHtml(name) + '">' +
-        '<label>' + escapeHtml(name) + '</label></div>';
+      var inputId = 'foh-' + pid + '-' + name.replace(/[^a-zA-Z0-9]/g, '_');
+      return '<div class="cpill foh-pill"><input type="radio" id="' + inputId + '" name="foh-' + pid + '" value="' + escapeHtml(name) + '">' +
+        '<label for="' + inputId + '">' + escapeHtml(name) + '</label></div>';
     }).join('') +
-    '<div class="cpill foh-pill none-pill"><input type="radio" name="foh-' + pid + '" value="" checked>' +
-    '<label>None / TBD</label></div>' +
+    '<div class="cpill foh-pill none-pill"><input type="radio" id="foh-' + pid + '-none" name="foh-' + pid + '" value="" checked>' +
+    '<label for="foh-' + pid + '-none">None / TBD</label></div>' +
     '</div>';
 
   h += '<div class="divider"></div>';
@@ -356,8 +357,9 @@ function renderCrewPicker(data) {
     '<p class="role-hint">Pick one or more stage crew.</p>' +
     '<div class="pill-grid">' +
     data.available.map(function(name) {
-      return '<div class="cpill stage-pill"><input type="checkbox" name="stage-' + pid + '" value="' + escapeHtml(name) + '">' +
-        '<label>' + escapeHtml(name) + '</label></div>';
+      var inputId = 'stage-' + pid + '-' + name.replace(/[^a-zA-Z0-9]/g, '_');
+      return '<div class="cpill stage-pill"><input type="checkbox" id="' + inputId + '" name="stage-' + pid + '" value="' + escapeHtml(name) + '">' +
+        '<label for="' + inputId + '">' + escapeHtml(name) + '</label></div>';
     }).join('') +
     '</div>';
 
