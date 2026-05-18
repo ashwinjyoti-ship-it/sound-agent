@@ -88,8 +88,8 @@
     .role-hint{font-size:11.5px;color:var(--muted);margin-bottom:9px}
     .pill-grid{display:flex;flex-wrap:wrap;gap:7px}
     .cpill{position:relative}
-    .cpill input{position:absolute;opacity:0;width:0;height:0;pointer-events:none}
-    .cpill label{display:inline-flex;align-items:center;padding:7px 13px;border-radius:24px;border:1.5px solid var(--border);background:rgba(255,255,255,.75);cursor:pointer;font-size:13px;font-weight:500;color:var(--text);transition:all .14s;user-select:none;line-height:1}
+    .cpill input{position:absolute;inset:0;width:100%;height:100%;opacity:0;margin:0;cursor:pointer;z-index:1}
+    .cpill label{position:relative;z-index:0;display:inline-flex;align-items:center;padding:7px 13px;border-radius:24px;border:1.5px solid var(--border);background:rgba(255,255,255,.75);cursor:pointer;font-size:13px;font-weight:500;color:var(--text);transition:all .14s;user-select:none;line-height:1}
     .cpill label:hover{border-color:var(--primary-light);background:rgba(252,208,143,.18)}
     .foh-pill input:checked+label{background:var(--primary);border-color:var(--accent-dark);color:#fff;box-shadow:0 3px 10px rgba(212,122,49,.35)}
     .stage-pill input:checked+label{background:var(--primary-dark);border-color:var(--primary-dark);color:#fff;box-shadow:0 3px 10px rgba(50,54,57,.30)}
