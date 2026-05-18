@@ -216,11 +216,13 @@ FORMATTING:
         }
       }
 
-      // Guard 5: AI said Done/Assigned after query_shows but without calling update_show
-      if (lastToolName === 'query_shows' && loop < 4 &&
-          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set)\b/i.test(replyLower)) {
+      // Guard 5: AI said Done/Updated without ever calling update_show.
+      // Fires whether the AI skipped only update_show or skipped all tools entirely.
+      if (lastToolName !== 'update_show' && loop < 4 &&
+          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set|saved)\b/i.test(replyLower) &&
+          /update|set|change|save|assign/i.test(lastUserLower)) {
         currentMessages.push({ role: 'assistant', content: textContent });
-        currentMessages.push({ role: 'user', content: 'You said done but update_show was never called. Use the show ID from the query result and call update_show now to actually save the changes.' });
+        currentMessages.push({ role: 'user', content: 'update_show was never called. First call query_shows to find the show ID, then call update_show to actually save the changes. Do not say Done until update_show returns success.' });
         continue;
       }
 
