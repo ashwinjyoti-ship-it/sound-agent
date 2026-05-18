@@ -1,6 +1,6 @@
 import express from 'express';
-import { KIMI_API_KEY, ORCHESTRATOR_TOKEN } from '../config';
-import { chatWithKimi } from '../services/kimi';
+import { CLAUDE_API_KEY, ORCHESTRATOR_TOKEN } from '../config';
+import { chatWithClaude } from '../services/claude';
 import { OrchestratorClient } from '../services/orchestrator';
 
 const router = express.Router();
@@ -13,12 +13,12 @@ router.post('/', async (req, res) => {
       return res.status(400).json({ error: 'messages array required' });
     }
 
-    if (!KIMI_API_KEY || !ORCHESTRATOR_TOKEN) {
+    if (!CLAUDE_API_KEY || !ORCHESTRATOR_TOKEN) {
       return res.status(500).json({ error: 'Server not configured: missing API keys' });
     }
 
     const orchestrator = new OrchestratorClient(ORCHESTRATOR_TOKEN);
-    const reply = await chatWithKimi(messages, orchestrator);
+    const reply = await chatWithClaude(messages, orchestrator);
 
     res.json({ reply });
   } catch (err: any) {

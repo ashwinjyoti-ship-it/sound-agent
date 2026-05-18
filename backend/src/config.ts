@@ -1,14 +1,13 @@
 import dotenv from 'dotenv';
 dotenv.config();
 
-export const KIMI_API_KEY = process.env.KIMI_API_KEY || '';
-export const KIMI_API_URL = 'https://api.moonshot.ai/v1/chat/completions';
+export const CLAUDE_API_KEY = process.env.CLAUDE_API_KEY || '';
 export const ORCHESTRATOR_URL = 'https://ncpa-orchestrator.ashwinjyoti.workers.dev';
 export const ORCHESTRATOR_TOKEN = process.env.ORCHESTRATOR_TOKEN || '';
 export const PORT = parseInt(process.env.PORT || '3000', 10);
 export const FRONTEND_URL = process.env.FRONTEND_URL || 'https://sound-agent.pages.dev';
 export const OPENAI_API_KEY = process.env.OPENAI_API_KEY || '';
 
-if (!KIMI_API_KEY) console.warn('KIMI_API_KEY not set');
+if (!CLAUDE_API_KEY) console.warn('CLAUDE_API_KEY not set');
 if (!ORCHESTRATOR_TOKEN) console.warn('ORCHESTRATOR_TOKEN not set');
 if (!OPENAI_API_KEY) console.warn('OPENAI_API_KEY not set — /api/transcribe will be unavailable');
