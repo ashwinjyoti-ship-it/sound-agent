@@ -137,6 +137,7 @@ TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
 - Crew availability → get_crew_availability
 - Add a show → add_show; once add_show succeeds, immediately call get_crew_availability for the same date so the user can assign crew right away
+- Assign crew to an existing show (user says "assign crew to [show]" or provides "FOH=..., Stage=...") → you MUST call query_shows first to find the show and get its ID, then call update_show with the crew. Never say "Done" or "Assigned" until update_show has been called and returned success. Do NOT list available crew as text — call get_crew_availability to show the interactive picker card.
 - Update a show (sound requirements, call time, crew) → first call query_shows with the date and program name (do NOT ask for venue). If the field you are about to overwrite already has data, tell the user the current value and ask "Overwrite with X?" — wait for their reply. Once they confirm, call update_show with the show id and the new value. Never say "Done" or "Updated" unless you have actually called update_show and received a success response.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Quote items shorthand: "M4-2" or "2xM4" both mean 2x M4 — trailing dash-number or leading Nx are quantity markers. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
@@ -205,13 +206,29 @@ FORMATTING:
 
     // No tool calls — return Kimi's natural response, or force structured JSON where needed
     if (!message.tool_calls || message.tool_calls.length === 0) {
-      // Guard: if AI skipped tools on loop 0 and looks like it said "nothing found",
-      // it hallucinated — force it to actually call query_shows before answering.
       if (loop === 0 && lastToolName === null) {
         const replyLower = (message.content || '').toLowerCase();
+        const lastUserContent = [...messages].reverse().find((m: any) => m.role === 'user')?.content || '';
+        const lastUserLower = lastUserContent.toLowerCase();
+
+        // Guard 1: "nothing found" without calling query_shows
         if (/nothing on|no shows?|no events?|don't see|can't find|not found|check.*?side\??|search.*?side\??/i.test(replyLower)) {
           currentMessages.push({ role: 'assistant', content: message.content });
           currentMessages.push({ role: 'user', content: 'You must call query_shows before answering — check the database now.' });
+          continue;
+        }
+
+        // Guard 2: user asking to assign crew to a show → must call get_crew_availability
+        if (/assign.{0,20}crew/i.test(lastUserLower) && !/foh\s*=/i.test(lastUserLower)) {
+          currentMessages.push({ role: 'assistant', content: message.content });
+          currentMessages.push({ role: 'user', content: 'You must call get_crew_availability for that date to show the crew picker — do not list crew as text.' });
+          continue;
+        }
+
+        // Guard 3: user sent picker result (FOH=... Stage=...) → must call query_shows then update_show
+        if (/assign crew for \d{4}-\d{2}-\d{2}/i.test(lastUserLower) && /foh\s*=/i.test(lastUserLower)) {
+          currentMessages.push({ role: 'assistant', content: message.content });
+          currentMessages.push({ role: 'user', content: 'You must call query_shows to find the show ID, then call update_show to save the crew. Do not confirm until both tool calls succeed.' });
           continue;
         }
       }
