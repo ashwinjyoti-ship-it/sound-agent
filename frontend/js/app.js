@@ -156,13 +156,46 @@ function stopRecording() {
   try { mediaRecorder.stop(); } catch(e) { micBtn.classList.remove('transcribing'); }
 }
 
+// ─── Slash commands ───
+const SLASH_COMMANDS = [
+  { cmd: '/clear', desc: 'Wipe the chat' },
+];
+
+const slashMenu = document.getElementById('slash-menu');
+
+function updateSlashMenu() {
+  var val = textInp.value;
+  if (!val.startsWith('/')) { slashMenu.style.display = 'none'; return; }
+  var query = val.toLowerCase();
+  var matches = SLASH_COMMANDS.filter(function(c) { return c.cmd.startsWith(query); });
+  if (!matches.length) { slashMenu.style.display = 'none'; return; }
+  slashMenu.innerHTML = matches.map(function(c) {
+    return '<div class="slash-item" data-cmd="' + c.cmd + '">' +
+      '<span class="slash-cmd">' + c.cmd + '</span>' +
+      '<span class="slash-desc">' + c.desc + '</span></div>';
+  }).join('');
+  slashMenu.style.display = 'block';
+}
+
+slashMenu.addEventListener('mousedown', function(e) {
+  var item = e.target.closest('.slash-item');
+  if (!item) return;
+  e.preventDefault();
+  textInp.value = item.dataset.cmd;
+  slashMenu.style.display = 'none';
+  sendMessage();
+});
+
 // ─── Send ───
 sendBtn.addEventListener('click', sendMessage);
+textInp.addEventListener('input', updateSlashMenu);
 textInp.addEventListener('keydown', function(e) {
+  if (e.key === 'Escape') { slashMenu.style.display = 'none'; return; }
   if (e.key === 'Enter' && !e.shiftKey) { e.preventDefault(); sendMessage(); }
 });
 
 async function sendMessage() {
+  slashMenu.style.display = 'none';
   const text = textInp.value.trim();
   if (!text) return;
 
