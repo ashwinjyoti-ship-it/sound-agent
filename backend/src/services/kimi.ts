@@ -236,15 +236,25 @@ FORMATTING:
         continue;
       }
 
-      // Guard 4: user confirmed an overwrite/update but AI said done without calling update_show (loop 0 only)
+      // Guard 4: user confirmed an overwrite/update but AI responded without calling update_show (loop 0 only).
+      // Broad regex: starts with a confirmation word — catches "yes please", "yes do it", etc.
       if (loop === 0 && lastToolName === null) {
-        const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)[\s.!,]*$/i.test(lastUserContent.trim());
+        const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)\b/i.test(lastUserContent.trim());
         const prevAssistantContent = [...currentMessages].reverse().find((m: any) => m.role === 'assistant')?.content || '';
-        if (isConfirmation && /overwrite|set to|update.*to|change.*to/i.test(prevAssistantContent)) {
+        if (isConfirmation && /overwrite|set to|update.*to|change.*to|properly instead/i.test(prevAssistantContent)) {
           currentMessages.push({ role: 'assistant', content: message.content });
-          currentMessages.push({ role: 'user', content: 'The user confirmed. Call update_show with the show ID and the new field values to actually save. Do not say Done until update_show has returned success.' });
+          currentMessages.push({ role: 'user', content: 'The user confirmed. First call query_shows to find the show and get its ID, then call update_show with the confirmed field values. Do not say Done until update_show returns success.' });
           continue;
         }
+      }
+
+      // Guard 5: AI said Done/Assigned after calling query_shows but without then calling update_show.
+      // Fires on any loop so it catches multi-loop sequences where AI calls query_shows then skips update_show.
+      if (lastToolName === 'query_shows' && loop < 4 &&
+          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set)\b/i.test(replyLower)) {
+        currentMessages.push({ role: 'assistant', content: message.content });
+        currentMessages.push({ role: 'user', content: 'You said done but update_show was never called. Use the show ID from the query result and call update_show now to actually save the changes.' });
+        continue;
       }
       // Always force quote card — Kimi must not summarise a quote in text
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
