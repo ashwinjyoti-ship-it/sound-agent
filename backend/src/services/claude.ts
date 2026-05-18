@@ -204,30 +204,6 @@ FORMATTING:
       const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : extractText(lastUserMsg?.content);
       const lastUserLower = lastUserContent.toLowerCase();
 
-      // Guard 1: "nothing found" without calling query_shows (loop 0 only)
-      if (loop === 0 && lastToolName === null &&
-          /nothing on|no shows?|no events?|don't see|can't find|not found|check.*?side\??|search.*?side\??/i.test(replyLower)) {
-        currentMessages.push({ role: 'assistant', content: textContent });
-        currentMessages.push({ role: 'user', content: 'You must call query_shows before answering — check the database now.' });
-        continue;
-      }
-
-      // Guard 2: user asking to assign crew → must call get_crew_availability first
-      if (/assign.{0,20}crew/i.test(lastUserLower) && !/foh\s*=/i.test(lastUserLower) &&
-          lastToolName !== 'get_crew_availability' && loop < 3) {
-        currentMessages.push({ role: 'assistant', content: textContent });
-        currentMessages.push({ role: 'user', content: 'You must call get_crew_availability for that date to show a fresh crew picker — do not refer to a previous card or list crew as plain text.' });
-        continue;
-      }
-
-      // Guard 3: user sent picker result (FOH=... Stage=...) → must call query_shows then update_show (loop 0 only)
-      if (loop === 0 && lastToolName === null &&
-          /assign crew for \d{4}-\d{2}-\d{2}/i.test(lastUserLower) && /foh\s*=/i.test(lastUserLower)) {
-        currentMessages.push({ role: 'assistant', content: textContent });
-        currentMessages.push({ role: 'user', content: 'You must call query_shows to find the show ID, then call update_show to save the crew. Do not confirm until both tool calls succeed.' });
-        continue;
-      }
-
       // Guard 4: user confirmed an overwrite but AI responded without calling update_show (loop 0 only)
       if (loop === 0 && lastToolName === null) {
         const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)\b/i.test(lastUserContent.trim());
