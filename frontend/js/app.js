@@ -159,10 +159,10 @@ function stopRecording() {
 // ─── Slash commands ───
 const SLASH_COMMANDS = [
   { cmd: '/clear',        desc: 'Wipe the chat' },
-  { cmd: '/add-show',     desc: 'Add a show',                    expand: 'Date: , Name: , Venue: ' },
-  { cmd: '/crew-assign',  desc: 'Check crew availability',       expand: 'Date: ' },
-  { cmd: '/update-CT',    desc: 'Update call time for a show',   expand: 'Show: , Date: , Time: ' },
-  { cmd: '/update-sound', desc: 'Update sound requirements',     expand: 'Show: , Date: , Requirement: ' },
+  { cmd: '/add-show',     desc: 'Add a show',                    expand: 'Add show — Date: , Name: , Venue: ' },
+  { cmd: '/crew-assign',  desc: 'Check crew availability',       expand: 'Crew availability — Date: ' },
+  { cmd: '/update-CT',    desc: 'Update call time for a show',   expand: 'Update call time — Show: , Date: , Time: ' },
+  { cmd: '/update-sound', desc: 'Update sound requirements',     expand: 'Update sound requirements — Show: , Date: , Requirement: ' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
