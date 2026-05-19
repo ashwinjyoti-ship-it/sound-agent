@@ -15,6 +15,7 @@ let isRecording = false;
 let messages = [];
 let voiceTimeout = null;
 var copyStore = {};
+var activeTask = null; // { type: 'CT'|'SR'|'Assign'|'Add', prefix: 'CT: ' }
 
 const STORAGE_KEY = 'eddy_msgs';
 const MAX_MSGS = 40;
@@ -159,10 +160,10 @@ function stopRecording() {
 // ─── Slash commands ───
 const SLASH_COMMANDS = [
   { cmd: '/clear',        desc: 'Wipe the chat' },
-  { cmd: '/add-show',     desc: 'Add a show',                    expand: 'Add show — Date: , Name: , Venue: ' },
-  { cmd: '/crew-assign',  desc: 'Check crew availability',       expand: 'Crew availability — Date: ' },
-  { cmd: '/update-CT',    desc: 'Update call time for a show',   expand: 'Update call time — Show: , Date: , Time: ' },
-  { cmd: '/update-sound', desc: 'Update sound requirements',     expand: 'Update sound requirements — Show: , Date: , Requirement: ' },
+  { cmd: '/add-show',     desc: 'Add a show',              prefix: 'Add: ',    taskType: 'Add' },
+  { cmd: '/crew-assign',  desc: 'Assign crew to a show',   prefix: 'Assign: ', taskType: 'Assign' },
+  { cmd: '/update-CT',    desc: 'Update call time',        prefix: 'CT: ',     taskType: 'CT' },
+  { cmd: '/update-sound', desc: 'Update sound requirements', prefix: 'SR: ',   taskType: 'SR' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
@@ -187,8 +188,10 @@ slashMenu.addEventListener('mousedown', function(e) {
   e.preventDefault();
   var matched = SLASH_COMMANDS.find(function(c) { return c.cmd === item.dataset.cmd; });
   slashMenu.style.display = 'none';
-  if (matched && matched.expand) {
-    textInp.value = matched.expand;
+  if (matched && matched.prefix) {
+    activeTask = { type: matched.taskType, prefix: matched.prefix };
+    textInp.value = matched.prefix;
+    textInp.placeholder = 'Type or hold mic…';
     textInp.focus();
   } else {
     textInp.value = item.dataset.cmd;
@@ -212,13 +215,17 @@ async function sendMessage() {
   // Handle slash commands
   var matched = SLASH_COMMANDS.find(function(c) { return c.cmd === text.toLowerCase(); });
   if (matched) {
-    if (matched.expand) {
-      textInp.value = matched.expand;
+    if (matched.prefix) {
+      activeTask = { type: matched.taskType, prefix: matched.prefix };
+      textInp.value = matched.prefix;
+      textInp.placeholder = 'Type or hold mic…';
       textInp.focus();
     } else if (matched.cmd === '/clear') {
       chatEl.innerHTML = '';
       clearMessages();
       textInp.value = '';
+      activeTask = null;
+      textInp.placeholder = 'Type or hold mic…';
       addMsg('assistant', 'Cleared. Clean slate.');
     }
     return;
@@ -236,7 +243,7 @@ async function sendMessage() {
     const res = await fetch(API_BASE + '/api/chat', {
       method: 'POST',
       headers: { 'Content-Type': 'application/json' },
-      body: JSON.stringify({ messages: messages }),
+      body: JSON.stringify({ messages: messages, activeTask: activeTask }),
     });
 
     removeLoading(loadingId);
@@ -249,8 +256,18 @@ async function sendMessage() {
 
     const data = await res.json();
     const reply = data.reply || 'Got nothing back. The server might be half-asleep.';
+    const taskDone = data.taskDone || false;
     messages.push({ role: 'assistant', content: reply });
     saveMessages();
+
+    if (taskDone || !activeTask) {
+      activeTask = null;
+      textInp.placeholder = 'Type or hold mic…';
+    } else if (activeTask) {
+      // Restore prefix hint so user sees context for their next reply
+      textInp.value = activeTask.prefix;
+      textInp.placeholder = 'Type or hold mic…';
+    }
 
     const structured = tryParseStructured(reply);
     if (structured) {
@@ -367,18 +384,36 @@ function renderStructured(data) {
 function renderCrewPicker(data) {
   const date = data.date || 'selected date';
   const pid = 'cp-' + Date.now();
-  let h = '<div class="crew-picker-root" data-pid="' + pid + '">';
-  h += '<div><strong>Crew for ' + escapeHtml(fmtDate(date)) + '</strong></div>';
+  const conflicts = data.conflicts || [];
+  const singleShowId = conflicts.length === 1 ? conflicts[0].id : null;
 
-  if (data.conflicts && data.conflicts.length) {
-    h += '<div class="card-in-msg" style="background:var(--warn-bg);border-color:var(--warn-border)">' +
-      '<div style="font-size:12px;font-weight:700;color:var(--warn-text);margin-bottom:6px">⚠ Existing shows:</div>' +
-      data.conflicts.map(function(c) {
-        return '<div style="font-size:12px;margin-bottom:4px">' +
-          '• ' + escapeHtml(c.event_date) + ': <strong>' + escapeHtml(c.program) + '</strong> @ ' + escapeHtml(c.venue) +
-          (c.crew ? ' <span style="color:var(--muted)">(' + escapeHtml(c.crew) + ')</span>' : '') +
-          '</div>';
-      }).join('') + '</div>';
+  let h = '<div class="crew-picker-root" data-pid="' + pid + '"' +
+    (singleShowId != null ? ' data-show-id="' + singleShowId + '"' : '') + '>';
+
+  if (conflicts.length === 1) {
+    // Single show — just a header label
+    h += '<div style="margin-bottom:8px"><strong>' +
+      escapeHtml(conflicts[0].program) + '</strong> @ ' + escapeHtml(conflicts[0].venue) +
+      ' — ' + escapeHtml(fmtDate(date)) + '</div>';
+    if (conflicts[0].crew && conflicts[0].crew !== 'no crew yet') {
+      h += '<div style="font-size:12px;color:var(--muted);margin-bottom:8px">Current crew: ' +
+        escapeHtml(conflicts[0].crew) + '</div>';
+    }
+  } else if (conflicts.length > 1) {
+    // Multiple shows — radio selector
+    h += '<div style="margin-bottom:10px">' +
+      '<div style="font-size:12px;font-weight:700;margin-bottom:6px">Assigning to which show?</div>' +
+      conflicts.map(function(c, i) {
+        return '<div style="margin-bottom:4px">' +
+          '<label style="display:flex;align-items:center;gap:6px;font-size:13px">' +
+          '<input type="radio" name="show-pick-' + pid + '" value="' + escapeHtml(String(c.id)) + '"' + (i === 0 ? ' checked' : '') + '>' +
+          '<strong>' + escapeHtml(c.program) + '</strong> @ ' + escapeHtml(c.venue) +
+          (c.crew && c.crew !== 'no crew yet' ? ' <span style="color:var(--muted);font-size:12px">(' + escapeHtml(c.crew) + ')</span>' : '') +
+          '</label></div>';
+      }).join('') +
+      '</div>';
+  } else {
+    h += '<div><strong>Crew for ' + escapeHtml(fmtDate(date)) + '</strong></div>';
   }
 
   if (!data.available || !data.available.length) {
@@ -445,8 +480,9 @@ function attachCrewListeners(data, container) {
   var root = container.querySelector('.crew-picker-root');
   if (!root) return;
 
-  var fohName = root.dataset.pid ? 'foh-' + root.dataset.pid : 'foh';
-  var stageName = root.dataset.pid ? 'stage-' + root.dataset.pid : 'stage';
+  var pid = root.dataset.pid;
+  var fohName = pid ? 'foh-' + pid : 'foh';
+  var stageName = pid ? 'stage-' + pid : 'stage';
 
   function syncStageVisibility(selectedFohValue) {
     root.querySelectorAll('input[name="' + stageName + '"]').forEach(function(el) {
@@ -487,7 +523,12 @@ function attachCrewListeners(data, container) {
       var stageEls = root.querySelectorAll('input[name="' + stageName + '"]:checked');
       var stage = Array.from(stageEls).map(function(e) { return e.value; }).filter(Boolean);
 
-      var msg = 'Assign crew for ' + date + ': FOH=' + (foh || 'TBD') + ', Stage=' + (stage.join(', ') || 'TBD');
+      // Prefer show ID from radio selector (multi-show), then from root data attr (single show)
+      var showPickEl = root.querySelector('input[name="show-pick-' + pid + '"]:checked');
+      var showId = showPickEl ? showPickEl.value : (root.dataset.showId || '');
+      var msg = showId
+        ? 'Assign crew for show #' + showId + ' on ' + date + ': FOH=' + (foh || 'TBD') + ', Stage=' + (stage.join(', ') || 'TBD')
+        : 'Assign crew for ' + date + ': FOH=' + (foh || 'TBD') + ', Stage=' + (stage.join(', ') || 'TBD');
       textInp.value = msg;
       sendMessage();
     });

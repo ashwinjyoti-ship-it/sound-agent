@@ -7,7 +7,7 @@ const router = express.Router();
 
 router.post('/', async (req, res) => {
   try {
-    const { messages } = req.body;
+    const { messages, activeTask } = req.body;
 
     if (!Array.isArray(messages) || messages.length === 0) {
       return res.status(400).json({ error: 'messages array required' });
@@ -18,9 +18,9 @@ router.post('/', async (req, res) => {
     }
 
     const orchestrator = new OrchestratorClient(ORCHESTRATOR_TOKEN);
-    const reply = await chatWithClaude(messages, orchestrator);
+    const result = await chatWithClaude(messages, orchestrator, activeTask);
 
-    res.json({ reply });
+    res.json({ reply: result.reply, taskDone: result.taskDone });
   } catch (err: any) {
     console.error('Chat error:', err);
     res.status(500).json({ error: err.message || 'Chat failed' });
