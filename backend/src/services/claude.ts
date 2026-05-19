@@ -88,10 +88,60 @@ function extractText(content: any): string {
   return '';
 }
 
+// Deterministic handler for the crew-picker "Assign Crew" button message.
+// Format: "Assign crew for YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"
+async function handleAssignCrewMessage(
+  userContent: string,
+  orchestrator: OrchestratorClient,
+): Promise<string | null> {
+  const m = userContent.match(
+    /^Assign crew for (\d{4}-\d{2}-\d{2}):\s*FOH=([^,]+),\s*Stage=(.+)$/i,
+  );
+  if (!m) return null;
+
+  const [, date, rawFoh, rawStage] = m;
+  const fohCrew = rawFoh.trim() === 'TBD' ? '' : rawFoh.trim();
+  const stageCrew = rawStage.trim() === 'TBD' ? '' : rawStage.trim();
+
+  const showsData = (await orchestrator.getShows({ from: date, to: date })) as any;
+  const shows: any[] = showsData?.data || [];
+
+  if (shows.length === 0) {
+    return `No show found on ${date} — nothing to assign crew to.`;
+  }
+
+  if (shows.length === 1) {
+    const show = shows[0];
+    const patch: Record<string, string> = {};
+    if (fohCrew) patch.foh_crew = fohCrew;
+    if (stageCrew) patch.stage_crew = stageCrew;
+    const result = (await orchestrator.updateShow(show.id, patch)) as any;
+    if (result?.error) {
+      return `Couldn't save crew: ${result.error}`;
+    }
+    const parts: string[] = [];
+    if (fohCrew) parts.push(`${fohCrew} on FOH`);
+    if (stageCrew) parts.push(`${stageCrew} on stage`);
+    const summary = parts.length ? parts.join(', ') : 'No crew assigned';
+    return `Done. ${summary} for ${show.program}.`;
+  }
+
+  // Multiple shows on that date — fall through to the AI loop with the show list injected
+  return null;
+}
+
 export async function chatWithClaude(messages: any[], orchestrator: OrchestratorClient): Promise<string> {
   const nowIST = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
   const today = nowIST.toISOString().slice(0, 10);
   const currentYear = nowIST.getUTCFullYear();
+
+  // Short-circuit structured crew-assignment messages from the picker button
+  const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
+  const lastUserContent = typeof lastUserMsg?.content === 'string'
+    ? lastUserMsg.content
+    : extractText(lastUserMsg?.content);
+  const assignResult = await handleAssignCrewMessage(lastUserContent, orchestrator);
+  if (assignResult !== null) return assignResult;
 
   const systemPrompt = `You are Eddy — the NCPA Sound Department's operations assistant. Not the chief engineer. The calm intelligence that keeps the whole operation running when the day gets ridiculous.
 
