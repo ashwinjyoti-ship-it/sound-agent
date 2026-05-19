@@ -158,7 +158,11 @@ function stopRecording() {
 
 // ─── Slash commands ───
 const SLASH_COMMANDS = [
-  { cmd: '/clear', desc: 'Wipe the chat' },
+  { cmd: '/clear',        desc: 'Wipe the chat' },
+  { cmd: '/add-show',     desc: 'Add a show',                    expand: 'Add show: [dd/mm/yy], [program name], [venue], [call time]' },
+  { cmd: '/crew-assign',  desc: 'Check crew availability',       expand: 'Check crew availability for ' },
+  { cmd: '/update-sound', desc: 'Update sound requirements',     expand: 'Update sound requirements for [show name] on [dd/mm/yy] to: ' },
+  { cmd: '/update-CT',    desc: 'Update call time for a show',   expand: 'Update call time for [show name] on [dd/mm/yy] to ' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
@@ -181,9 +185,15 @@ slashMenu.addEventListener('mousedown', function(e) {
   var item = e.target.closest('.slash-item');
   if (!item) return;
   e.preventDefault();
-  textInp.value = item.dataset.cmd;
+  var matched = SLASH_COMMANDS.find(function(c) { return c.cmd === item.dataset.cmd; });
   slashMenu.style.display = 'none';
-  sendMessage();
+  if (matched && matched.expand) {
+    textInp.value = matched.expand;
+    textInp.focus();
+  } else {
+    textInp.value = item.dataset.cmd;
+    sendMessage();
+  }
 });
 
 // ─── Send ───
@@ -199,12 +209,18 @@ async function sendMessage() {
   const text = textInp.value.trim();
   if (!text) return;
 
-  // Handle /clear command
-  if (text.toLowerCase() === '/clear') {
-    chatEl.innerHTML = '';
-    clearMessages();
-    textInp.value = '';
-    addMsg('assistant', 'Cleared. Clean slate.');
+  // Handle slash commands
+  var matched = SLASH_COMMANDS.find(function(c) { return c.cmd === text.toLowerCase(); });
+  if (matched) {
+    if (matched.expand) {
+      textInp.value = matched.expand;
+      textInp.focus();
+    } else if (matched.cmd === '/clear') {
+      chatEl.innerHTML = '';
+      clearMessages();
+      textInp.value = '';
+      addMsg('assistant', 'Cleared. Clean slate.');
+    }
     return;
   }
 
