@@ -2,21 +2,21 @@ import { CLAUDE_API_KEY } from '../config';
 import { OrchestratorClient } from './orchestrator';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-const CLAUDE_MODEL = 'claude-haiku-4-5-20251001';
+const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
 const TOOLS = [
   {
     name: 'query_shows',
-    description: 'Query shows/events from the NCPA schedule database by date range and optional filters',
+    description: 'Query shows/events from the NCPA schedule database. Pass from/to dates if known; omit both to search upcoming shows by program name only.',
     input_schema: {
       type: 'object',
       properties: {
-        from: { type: 'string', description: 'Start date YYYY-MM-DD (required)' },
+        from: { type: 'string', description: 'Start date YYYY-MM-DD. Omit to search upcoming shows (today onwards) by program name.' },
         to: { type: 'string', description: 'End date YYYY-MM-DD (defaults to from if omitted)' },
         venue: { type: 'string', description: 'Optional venue filter: JBT, Tata, Experimental, Little Theatre, Godrej Dance, TT, etc.' },
         program: { type: 'string', description: 'Optional show/program name to filter by (partial match, case-insensitive)' },
       },
-      required: ['from'],
+      required: [],
     },
   },
   {
@@ -88,12 +88,35 @@ function extractText(content: any): string {
   return '';
 }
 
-// Deterministic handler for the crew-picker "Assign Crew" button message.
-// Format: "Assign crew for YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"
+// Deterministic handler for crew-picker "Assign Crew" button messages.
+// Handles two formats:
+//   "Assign crew for show #42 on YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"  (with show ID)
+//   "Assign crew for YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"              (date-only fallback)
 async function handleAssignCrewMessage(
   userContent: string,
   orchestrator: OrchestratorClient,
-): Promise<string | null> {
+): Promise<{ reply: string; taskDone: boolean } | null> {
+
+  // Try show-ID variant first (set by the crew picker when show ID is known)
+  const mWithId = userContent.match(
+    /^Assign crew for show #(\d+) on (\d{4}-\d{2}-\d{2}):\s*FOH=([^,]+),\s*Stage=(.+)$/i,
+  );
+  if (mWithId) {
+    const [, rawId, , rawFoh, rawStage] = mWithId;
+    const fohCrew = rawFoh.trim() === 'TBD' ? '' : rawFoh.trim();
+    const stageCrew = rawStage.trim() === 'TBD' ? '' : rawStage.trim();
+    const patch: Record<string, string> = {};
+    if (fohCrew) patch.foh_crew = fohCrew;
+    if (stageCrew) patch.stage_crew = stageCrew;
+    const result = (await orchestrator.updateShow(Number(rawId), patch)) as any;
+    if (result?.error) return { reply: `Couldn't save crew: ${result.error}`, taskDone: false };
+    const parts: string[] = [];
+    if (fohCrew) parts.push(`${fohCrew} on FOH`);
+    if (stageCrew) parts.push(`${stageCrew} on stage`);
+    return { reply: `Done. ${parts.join(', ') || 'No crew assigned'}.`, taskDone: true };
+  }
+
+  // Date-only variant
   const m = userContent.match(
     /^Assign crew for (\d{4}-\d{2}-\d{2}):\s*FOH=([^,]+),\s*Stage=(.+)$/i,
   );
@@ -107,7 +130,7 @@ async function handleAssignCrewMessage(
   const shows: any[] = showsData?.data || [];
 
   if (shows.length === 0) {
-    return `No show found on ${date} — nothing to assign crew to.`;
+    return { reply: `No show found on ${date} — nothing to assign crew to.`, taskDone: false };
   }
 
   if (shows.length === 1) {
@@ -116,23 +139,33 @@ async function handleAssignCrewMessage(
     if (fohCrew) patch.foh_crew = fohCrew;
     if (stageCrew) patch.stage_crew = stageCrew;
     const result = (await orchestrator.updateShow(show.id, patch)) as any;
-    if (result?.error) {
-      return `Couldn't save crew: ${result.error}`;
-    }
+    if (result?.error) return { reply: `Couldn't save crew: ${result.error}`, taskDone: false };
     const parts: string[] = [];
     if (fohCrew) parts.push(`${fohCrew} on FOH`);
     if (stageCrew) parts.push(`${stageCrew} on stage`);
-    const summary = parts.length ? parts.join(', ') : 'No crew assigned';
-    return `Done. ${summary} for ${show.program}.`;
+    return { reply: `Done. ${parts.join(', ') || 'No crew assigned'} for ${show.program}.`, taskDone: true };
   }
 
-  // Multiple shows on that date — fall through to the AI loop with the show list injected
+  // Multiple shows on that date — fall through to the AI loop
   return null;
 }
 
-export async function chatWithClaude(messages: any[], orchestrator: OrchestratorClient): Promise<string> {
+// Task-specific system prompt injections keyed by activeTask.type
+const TASK_INSTRUCTIONS: Record<string, string> = {
+  CT: 'ACTIVE TASK — Update call time: The user wants to update a call time. Call query_shows to find the show (if only a name was given, search without a date). Show the existing call_time and ask "Overwrite with [new time]?" before calling update_show. After update_show succeeds, call query_shows to verify the saved call_time, then confirm with the actual saved value.',
+  SR: 'ACTIVE TASK — Update sound requirements: The user wants to update sound requirements. Call query_shows to find the show (if only a name was given, search without a date). Show the existing sound_requirements and ask before overwriting. After update_show succeeds, call query_shows to verify, then confirm.',
+  Assign: 'ACTIVE TASK — Assign crew: The user wants to assign crew to a show. If a date was given, call get_crew_availability. If a show name was given, call query_shows first to find the date, then get_crew_availability.',
+  Add: 'ACTIVE TASK — Add a new show: The user wants to add a show. Collect event_date, program, venue (required) from what they typed. If anything required is missing, ask. Once you have the minimum, call add_show, then immediately call get_crew_availability for the same date.',
+};
+
+export async function chatWithClaude(
+  messages: any[],
+  orchestrator: OrchestratorClient,
+  activeTask?: { type: string; prefix: string } | null,
+): Promise<{ reply: string; taskDone: boolean }> {
   const nowIST = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
   const today = nowIST.toISOString().slice(0, 10);
+  const oneYearOut = new Date(nowIST.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const currentYear = nowIST.getUTCFullYear();
 
   // Short-circuit structured crew-assignment messages from the picker button
@@ -142,6 +175,8 @@ export async function chatWithClaude(messages: any[], orchestrator: Orchestrator
     : extractText(lastUserMsg?.content);
   const assignResult = await handleAssignCrewMessage(lastUserContent, orchestrator);
   if (assignResult !== null) return assignResult;
+
+  const taskInstruction = activeTask ? (TASK_INSTRUCTIONS[activeTask.type] || '') : '';
 
   const systemPrompt = `You are Eddy — the NCPA Sound Department's operations assistant. Not the chief engineer. The calm intelligence that keeps the whole operation running when the day gets ridiculous.
 
@@ -153,7 +188,9 @@ Never ask for the month or year if you can infer it. Queries are conversational.
 
 CRITICAL: NEVER say "nothing on [date]" or "no shows" without first calling query_shows. The database is the only source of truth — never assume a date is empty from prior knowledge.
 
-PERSONALITY:
+PAST DATES: If a show's event_date is before ${today}, it has already happened. For any update on a past show, flag it first: "That show is in the past — still want to update it?" Wait for confirmation before calling update_show.
+
+${taskInstruction ? taskInstruction + '\n\n' : ''}PERSONALITY:
 You are a highly capable operations coordinator — calm under pressure, organised without being rigid, technically aware, socially intuitive. You've seen chaos before. You expect problems and quietly solve them early. The vibe is: "I already handled it."
 
 - Warm but efficient. Smart without showing off.
@@ -178,10 +215,11 @@ Pass the user's shorthand as-is in the venue parameter; the backend resolves ali
 
 TOOLS — use them every time, no exceptions:
 - Schedule / shows → query_shows
+- If user gives only a show name with no date → call query_shows without from/to (backend searches upcoming shows automatically)
 - Crew availability → get_crew_availability
 - Add a show → add_show with whatever fields the user provides (date, program, venue are enough — call_time is optional, do NOT ask for it); once add_show succeeds, immediately call get_crew_availability for the same date so the user can assign crew right away
 - Assign crew to an existing show (user says "assign crew to [show]" or provides "FOH=..., Stage=...") → you MUST call query_shows first to find the show and get its ID, then call update_show with the crew. Never say "Done" or "Assigned" until update_show has been called and returned success. Do NOT list available crew as text — call get_crew_availability to show the interactive picker card.
-- Update a show (sound requirements, call time, crew) → first call query_shows with the date and program name (do NOT ask for venue). If multiple shows are found, ask which one — always state each show's actual date (e.g. "18 May" or "19 May"), never just "today" or "tomorrow". If the field you are about to overwrite already has data, tell the user the current value and ask "Overwrite with X?" — wait for their reply. Once they confirm, call update_show with the show id and the new value. Never say "Done" or "Updated" unless you have actually called update_show and received a success response.
+- Update a show (sound requirements, call time, crew) → first call query_shows with the date and program name (do NOT ask for venue). If multiple shows are found, ask which one — always state each show's actual date (e.g. "18 May" or "19 May"), never just "today" or "tomorrow". If the field you are about to overwrite already has data, tell the user the current value and ask "Overwrite with X?" — wait for their reply. Once they confirm, call update_show with the show id and the new value. After update_show succeeds, call query_shows to verify the field was actually saved, then confirm with the verified value. Never say "Done" or "Updated" unless you have called update_show AND verified with query_shows.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Quote items shorthand: "M4-2" or "2xM4" both mean 2x M4 — trailing dash-number or leading Nx are quantity markers. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
 - Unsure of an equipment name? Ask, don't guess.
@@ -215,9 +253,13 @@ FORMATTING:
 - Concise always`;
 
   let currentMessages = [...messages];
-  const maxLoops = 5;
+  const maxLoops = 6;
   let lastToolName: string | null = null;
   let lastToolResult: any = null;
+
+  // Verification state — track whether update_show ran and if we've re-queried to confirm
+  let updateShowSucceeded = false;
+  let queryShowsCalledAfterUpdate = false;
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetch(CLAUDE_API_URL, {
@@ -250,9 +292,14 @@ FORMATTING:
     // No tool calls — apply guards or return
     if (toolUseBlocks.length === 0) {
       const replyLower = textContent.toLowerCase();
-      const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
-      const lastUserContent = typeof lastUserMsg?.content === 'string' ? lastUserMsg.content : extractText(lastUserMsg?.content);
       const lastUserLower = lastUserContent.toLowerCase();
+
+      // Verification guard: update_show ran but we haven't re-queried to confirm the save
+      if (updateShowSucceeded && !queryShowsCalledAfterUpdate && loop < maxLoops - 1) {
+        currentMessages.push({ role: 'assistant', content: textContent });
+        currentMessages.push({ role: 'user', content: 'Before confirming done, call query_shows for the same show/date to verify the update was actually saved to the database.' });
+        continue;
+      }
 
       // Guard 4: user confirmed an overwrite but AI responded without calling update_show (loop 0 only)
       if (loop === 0 && lastToolName === null) {
@@ -266,9 +313,8 @@ FORMATTING:
         }
       }
 
-      // Guard 5: AI said Done/Updated without ever calling update_show.
-      // Fires whether the AI skipped only update_show or skipped all tools entirely.
-      if (lastToolName !== 'update_show' && loop < 4 &&
+      // Guard 5: AI said Done/Updated without ever calling update_show
+      if (lastToolName !== 'update_show' && loop < maxLoops - 1 &&
           /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set|saved)\b/i.test(replyLower) &&
           /update|set|change|save|assign/i.test(lastUserLower)) {
         currentMessages.push({ role: 'assistant', content: textContent });
@@ -284,28 +330,36 @@ FORMATTING:
           rate: it.rate ?? it.unit_price ?? 0,
           lineTotal: it.amount ?? it.lineTotal ?? it.total ?? 0,
         }));
-        return `\`\`\`json\n${JSON.stringify({
-          type: 'quote',
-          items: normalizedItems,
-          subtotal: lastToolResult.subtotal,
-          gst: lastToolResult.gst,
-          total: lastToolResult.total,
-        })}\n\`\`\``;
+        return {
+          reply: `\`\`\`json\n${JSON.stringify({
+            type: 'quote',
+            items: normalizedItems,
+            subtotal: lastToolResult.subtotal,
+            gst: lastToolResult.gst,
+            total: lastToolResult.total,
+          })}\n\`\`\``,
+          taskDone: true,
+        };
       }
 
       // Force crew picker card
       if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
-        return `\`\`\`json\n${JSON.stringify({
-          type: 'crew_availability',
-          date: lastToolResult.date,
-          available: lastToolResult.available,
-          assigned: lastToolResult.assigned,
-          unavailable: lastToolResult.unavailable,
-          conflicts: lastToolResult.conflicts,
-        })}\n\`\`\``;
+        return {
+          reply: `\`\`\`json\n${JSON.stringify({
+            type: 'crew_availability',
+            date: lastToolResult.date,
+            available: lastToolResult.available,
+            assigned: lastToolResult.assigned,
+            unavailable: lastToolResult.unavailable,
+            conflicts: lastToolResult.conflicts,
+          })}\n\`\`\``,
+          taskDone: true,
+        };
       }
 
-      return textContent || 'Done.';
+      // Verified update complete
+      const taskDone = updateShowSucceeded && queryShowsCalledAfterUpdate;
+      return { reply: textContent || 'Done.', taskDone };
     }
 
     // Has tool calls — push assistant message preserving full content blocks
@@ -314,10 +368,19 @@ FORMATTING:
     // Execute all tool calls, collect results
     const toolResults: Array<{ id: string; result: any }> = [];
     for (const toolBlock of toolUseBlocks) {
-      const result = await executeTool(toolBlock, orchestrator);
+      const result = await executeTool(toolBlock, orchestrator, today, oneYearOut);
       lastToolName = toolBlock.name;
       lastToolResult = result;
       toolResults.push({ id: toolBlock.id, result });
+
+      // Track verification state
+      if (toolBlock.name === 'update_show' && result?.success) {
+        updateShowSucceeded = true;
+        queryShowsCalledAfterUpdate = false;
+      }
+      if (toolBlock.name === 'query_shows' && updateShowSucceeded) {
+        queryShowsCalledAfterUpdate = true;
+      }
     }
 
     // Push all results as a single user message (Anthropic requires this)
@@ -331,14 +394,13 @@ FORMATTING:
     });
   }
 
-  return 'Hit the tool-call limit on that one — try breaking it into smaller questions.';
+  return { reply: 'Hit the tool-call limit on that one — try breaking it into smaller questions.', taskDone: false };
 }
 
-async function executeTool(toolBlock: any, orchestrator: OrchestratorClient): Promise<any> {
+async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, today: string, oneYearOut: string): Promise<any> {
   const name = toolBlock.name;
   const args = toolBlock.input || {};
 
-  // Venue alias groups — each array lists all DB values + user shorthands for one physical venue
   const VENUE_GROUPS: string[][] = [
     ['tt', 'tata', 'tatatheatre', 'tatamainstage'],
     ['tet', 'experimental', 'experimentaltheatre', 'tataexperimental', 'tataexperimentaltheatre'],
@@ -368,10 +430,15 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient): Pr
   try {
     switch (name) {
       case 'query_shows': {
+        // If no from date provided, search upcoming shows (today → 1 year out)
+        if (!args.from) {
+          args.from = today;
+          if (!args.to) args.to = oneYearOut;
+        }
+
         const to = args.to || args.from;
 
-        // If model misclassified a venue abbreviation as program (e.g. "JBT", "TET"),
-        // promote it to venue and clear program so the venue filter kicks in correctly
+        // Promote misclassified venue abbreviation in program field
         if (args.program && !args.venue) {
           const pk = venueKey(args.program);
           if (VENUE_GROUPS.some(g => g.includes(pk))) {
@@ -380,8 +447,6 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient): Pr
           }
         }
 
-        // Always fetch without venue filter — DB stores venues inconsistently
-        // (both abbreviations like TT/LT/JBT and full names), so filter client-side
         const result = (await orchestrator.getShows({ from: args.from, to })) as any;
 
         if (args.venue && result?.data?.length) {
@@ -508,6 +573,7 @@ async function getMergedCrewAvailability(date: string, orchestrator: Orchestrato
     assigned,
     unavailable,
     conflicts: events.map((e: any) => ({
+      id: e.id,
       event_date: e.event_date,
       program: e.program,
       venue: e.venue,
@@ -525,7 +591,6 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
   const unmatched: string[] = [];
 
   for (const item of items) {
-    // Extract quantity — support: "2 M4", "2xM4", "2×M4", "M4-2", "M4x2"
     const leadingQtyVal = item.match(/^(\d+)(?:\s*[xX×]\s*|\s+)/);
     const trailingQty = item.match(/[-xX×](\d+)$/);
     const qty = leadingQtyVal
