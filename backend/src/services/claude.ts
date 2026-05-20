@@ -303,7 +303,8 @@ FORMATTING:
 
       // Guard 4: user confirmed an overwrite but AI responded without calling update_show (loop 0 only)
       if (loop === 0 && lastToolName === null) {
-        const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)\b/i.test(lastUserContent.trim());
+        const strippedUserContent = lastUserContent.replace(/^(SR|CT|Add|Assign|DayOff):\s*/i, '').trim();
+        const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)\b/i.test(strippedUserContent);
         const prevAssistant = [...currentMessages].reverse().find((m: any) => m.role === 'assistant');
         const prevText = extractText(prevAssistant?.content);
         if (isConfirmation && /overwrite|set to|update.*to|change.*to|properly instead/i.test(prevText)) {
@@ -313,10 +314,10 @@ FORMATTING:
         }
       }
 
-      // Guard 5: AI said Done/Updated without ever calling update_show
+      // Guard 5: AI said Done/Updated/Verified without ever calling update_show
       if (lastToolName !== 'update_show' && loop < maxLoops - 1 &&
-          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set|saved)\b/i.test(replyLower) &&
-          /update|set|change|save|assign/i.test(lastUserLower)) {
+          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set|saved|verified)\b/i.test(replyLower) &&
+          /update|set|change|save|assign|overwrite/i.test(lastUserLower)) {
         currentMessages.push({ role: 'assistant', content: textContent });
         currentMessages.push({ role: 'user', content: 'update_show was never called. First call query_shows to find the show ID, then call update_show to actually save the changes. Do not say Done until update_show returns success.' });
         continue;
