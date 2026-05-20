@@ -184,7 +184,10 @@ const TASK_INSTRUCTIONS: Record<string, string> = {
 
 Day-off rules (follow exactly):
 1. Cross-reference the crew name against this known list: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3. If the name is ambiguous or not found, ask the user to clarify before proceeding.
-2. Date expansion — if the user gives day numbers only (e.g. "1,4,6,9,12"), expand them to full YYYY-MM-DD dates using the current month. Example: "Coni: 1,4,6,9,12" in May 2026 → 2026-05-01, 2026-05-04, 2026-05-06, 2026-05-09, 2026-05-12.
+2. Date expansion — if the user gives day numbers only (e.g. "1,4,6,9,12"):
+   - No month mentioned → use the current month to expand. Example: "Coni: 1,4,6" in May 2026 → 2026-05-01, 2026-05-04, 2026-05-06.
+   - Month explicitly mentioned (e.g. "June", "Jul", "next month") → use that month. Example: "Coni off 1,4,6 June" in May 2026 → 2026-06-01, 2026-06-04, 2026-06-06.
+   - "Next month" → use the month after the current one. Always construct full YYYY-MM-DD dates.
 3. Confirm before adding — show the expanded list in a readable format and ask "Adding day-offs for [Name]: [1 May, 4 May …] — confirm?" Wait for the user's yes before calling manage_crew_dayoff with action=add.
 4. Confirm before removing — same pattern: list the dates and ask "Removing day-offs for [Name]: [dates] — confirm?" Wait for yes.
 5. For action=list — call manage_crew_dayoff immediately without confirmation.
@@ -255,7 +258,8 @@ TOOLS — use them every time, no exceptions:
 - Update a show (sound requirements, call time, crew) → first call query_shows with the date and program name (do NOT ask for venue). If multiple shows are found, ask which one — always state each show's actual date (e.g. "18 May" or "19 May"), never just "today" or "tomorrow". If the field you are about to overwrite already has data, tell the user the current value and ask "Overwrite with X?" — wait for their reply. Once they confirm, call update_show with the show id and the new value. After update_show succeeds, call query_shows to verify the field was actually saved, then confirm with the verified value. Never say "Done" or "Updated" unless you have called update_show AND verified with query_shows.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
 - Crew day-offs / unavailability (add, remove, list) → manage_crew_dayoff
-  - Day numbers only → expand to full YYYY-MM-DD using current month (${today.slice(0, 7)})
+  - Day numbers only, no month → expand using current month (${today.slice(0, 7)})
+  - Day numbers with explicit month (e.g. "June", "Jul", "next month") → expand using that month, not the current one
   - Always confirm the expanded list before action=add or action=remove
   - action=list → call immediately, no confirmation needed
   - Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3
