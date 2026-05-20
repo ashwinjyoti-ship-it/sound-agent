@@ -164,6 +164,7 @@ const SLASH_COMMANDS = [
   { cmd: '/crew-assign',  desc: 'Assign crew to a show',   prefix: 'Assign: ', taskType: 'Assign' },
   { cmd: '/update-CT',    desc: 'Update call time',        prefix: 'CT: ',     taskType: 'CT' },
   { cmd: '/update-sound', desc: 'Update sound requirements', prefix: 'SR: ',   taskType: 'SR' },
+  { cmd: '/quote',        desc: 'Build an equipment quote',  prefix: 'Quote — Items: ', taskType: 'Quote' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
