@@ -191,7 +191,8 @@ Day-off rules (follow exactly):
 3. Confirm before adding — show the expanded list in a readable format and ask "Adding day-offs for [Name]: [1 May, 4 May …] — confirm?" Wait for the user's yes before calling manage_crew_dayoff with action=add.
 4. Confirm before removing — same pattern: list the dates and ask "Removing day-offs for [Name]: [dates] — confirm?" Wait for yes.
 5. For action=list — call manage_crew_dayoff immediately without confirmation.
-6. After a successful add/remove, summarise what was done: "Done. Added X day-offs for [Name]." or "Removed [dates] for [Name]."`,
+6. After a successful add/remove, summarise what was done: "Done. Added X day-offs for [Name]." or "Removed [dates] for [Name]."
+7. Correction handling — if the user replies with a change rather than a plain yes/confirm (e.g. "actually make it 1, 4, 7" or "remove the 4th"), this is a CORRECTION, not a confirmation. Do NOT call manage_crew_dayoff. Update the list with the correction, show the revised dates, and ask for confirmation again. Only call the tool when the user explicitly confirms the final list.`,
 };
 
 export async function chatWithClaude(
@@ -263,6 +264,7 @@ TOOLS — use them every time, no exceptions:
   - Always confirm the expanded list before action=add or action=remove
   - action=list → call immediately, no confirmation needed
   - Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3
+  - CORRECTION FLOW: if the user modifies any dates or name instead of simply confirming, do NOT call manage_crew_dayoff — update the list, re-show it, and ask "confirm?" again. Call the tool ONLY on an explicit yes/confirm to a confirmation question.
 - Quote items shorthand: "M4-2" or "2xM4" both mean 2x M4 — trailing dash-number or leading Nx are quantity markers. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
 - Unsure of an equipment name? Ask, don't guess.
 
@@ -364,6 +366,23 @@ FORMATTING:
         continue;
       }
 
+      // Guard 6: AI said day-offs were added/removed without calling manage_crew_dayoff
+      if (lastToolName !== 'manage_crew_dayoff' && loop < maxLoops - 1 &&
+          /\b(done|added|removed|set|day.?off.*saved|saved.*day.?off)\b/i.test(replyLower)) {
+        const prevAssistant = [...currentMessages].reverse().find((m: any) => m.role === 'assistant');
+        const prevText = extractText(prevAssistant?.content);
+        const dayOffConfirmPending = /confirm\?|day.?off.*confirm|adding day|removing day/i.test(prevText);
+        const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)\b/i.test(lastUserContent.trim());
+        if (dayOffConfirmPending && isConfirmation) {
+          currentMessages.push({ role: 'assistant', content: textContent });
+          currentMessages.push({ role: 'user', content: 'The user confirmed the day-offs. Call manage_crew_dayoff with the confirmed action and dates from the confirmation question above. Do not say Done until the tool returns success.' });
+          continue;
+        }
+      }
+
+      // Guard 7: day-off confirm was pending, user made a correction, but AI tried to call the tool without re-confirming
+      // (handled in the tool-call branch below — see correction intercept)
+
       // Force quote card
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
         const normalizedItems = (lastToolResult.items || []).map((it: any) => ({
@@ -402,6 +421,20 @@ FORMATTING:
       // Verified update complete
       const taskDone = updateShowSucceeded && queryShowsCalledAfterUpdate;
       return { reply: textContent || 'Done.', taskDone };
+    }
+
+    // Guard 7: day-off confirm was pending, user sent a correction (not a plain yes), but AI
+    // is about to call manage_crew_dayoff — intercept and force a re-confirmation instead.
+    if (loop === 0 && toolUseBlocks.some((b: any) => b.name === 'manage_crew_dayoff' && b.input?.action !== 'list')) {
+      const prevAssistant = [...currentMessages].reverse().find((m: any) => m.role === 'assistant');
+      const prevText = extractText(prevAssistant?.content);
+      const dayOffConfirmPending = /confirm\?|day.?off.*confirm|adding day|removing day/i.test(prevText);
+      const isPlainConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)[.!]?\s*$/i.test(lastUserContent.trim());
+      if (dayOffConfirmPending && !isPlainConfirmation) {
+        // User made a correction, not a confirmation — stop the tool call, ask AI to revise and re-confirm
+        currentMessages.push({ role: 'user', content: "The user made a correction to the dates, not a confirmation. Do NOT call manage_crew_dayoff yet. Update the date list based on their correction, show the revised list, and ask 'confirm?' again." });
+        continue;
+      }
     }
 
     // Has tool calls — push assistant message preserving full content blocks
