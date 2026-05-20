@@ -153,7 +153,7 @@ async function handleAssignCrewMessage(
 // Task-specific system prompt injections keyed by activeTask.type
 const TASK_INSTRUCTIONS: Record<string, string> = {
   CT: 'ACTIVE TASK — Update call time: The user wants to update a call time. Call query_shows to find the show (if only a name was given, search without a date). Show the existing call_time and ask "Overwrite with [new time]?" before calling update_show. After update_show succeeds, call query_shows to verify the saved call_time, then confirm with the actual saved value.',
-  SR: 'ACTIVE TASK — Update sound requirements: The user wants to update sound requirements. Call query_shows to find the show (if only a name was given, search without a date). Always state the current sound_requirements value explicitly (e.g. "Sound requirements currently: DPA 4099 on violin. Overwrite with X?") before calling update_show. After update_show succeeds, call query_shows to verify, then confirm.',
+  SR: 'ACTIVE TASK — Update sound requirements: The user wants to update sound requirements. ALWAYS call query_shows first — never trust conversation memory for the current DB state. Show the existing sound_requirements value explicitly (e.g. "Sound requirements currently: DPA 4099 on violin. Overwrite with X?") before calling update_show. After update_show succeeds, call query_shows to verify the saved value, then confirm. Never say "already set" or "no change needed" without calling query_shows to confirm the current DB value.',
   Assign: 'ACTIVE TASK — Assign crew: The user wants to assign crew to a show. If a date was given, call get_crew_availability. If a show name was given, call query_shows first to find the date, then get_crew_availability.',
   Add: 'ACTIVE TASK — Add a new show: The user wants to add a show. Collect event_date, program, venue (required) from what they typed. If anything required is missing, ask. Once you have the minimum, call add_show, then immediately call get_crew_availability for the same date.',
 };
@@ -309,17 +309,17 @@ FORMATTING:
         const prevText = extractText(prevAssistant?.content);
         if (isConfirmation && /overwrite|set to|update.*to|change.*to|properly instead/i.test(prevText)) {
           currentMessages.push({ role: 'assistant', content: textContent });
-          currentMessages.push({ role: 'user', content: 'The user confirmed. First call query_shows to find the show and get its ID, then call update_show with the confirmed field values. Do not say Done until update_show returns success.' });
+          currentMessages.push({ role: 'user', content: 'The user confirmed the overwrite. Call update_show now using the show ID from the earlier query_shows result and the confirmed new value. Do not re-explain — just call the tool. Do not say Done until update_show returns success.' });
           continue;
         }
       }
 
-      // Guard 5: AI said Done/Updated/Verified without ever calling update_show
+      // Guard 5: AI claimed success/no-change without ever calling update_show
       if (lastToolName !== 'update_show' && loop < maxLoops - 1 &&
-          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set|saved|verified)\b/i.test(replyLower) &&
+          /\b(done|updated|assigned|all set|crew.*set|set to|call time.*set|saved|verified|already set|no change needed|no change|already updated)\b/i.test(replyLower) &&
           /update|set|change|save|assign|overwrite/i.test(lastUserLower)) {
         currentMessages.push({ role: 'assistant', content: textContent });
-        currentMessages.push({ role: 'user', content: 'update_show was never called. First call query_shows to find the show ID, then call update_show to actually save the changes. Do not say Done until update_show returns success.' });
+        currentMessages.push({ role: 'user', content: 'update_show was never called — do not rely on conversation memory. Call query_shows to get the current DB state, then call update_show to save the changes. Do not say Done until update_show returns success.' });
         continue;
       }
 
