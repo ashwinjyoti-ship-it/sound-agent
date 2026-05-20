@@ -78,6 +78,30 @@ const TOOLS = [
       required: ['items'],
     },
   },
+  {
+    name: 'manage_crew_dayoff',
+    description: 'Add, remove, or list day-offs (unavailability) for a crew member. Always confirm the full date list with the user before calling action=add or action=remove. For action=list, returns only upcoming day-offs.',
+    input_schema: {
+      type: 'object',
+      properties: {
+        action: {
+          type: 'string',
+          enum: ['add', 'remove', 'list'],
+          description: '"add" to mark dates as unavailable, "remove" to clear them, "list" to see upcoming day-offs',
+        },
+        crew_name: {
+          type: 'string',
+          description: 'Exact crew member name (e.g. "Coni", "Nikhil"). Cross-reference against known crew list.',
+        },
+        dates: {
+          type: 'array',
+          items: { type: 'string' },
+          description: 'Array of dates in YYYY-MM-DD format. Required for add/remove.',
+        },
+      },
+      required: ['action', 'crew_name'],
+    },
+  },
 ];
 
 function extractText(content: any): string {
@@ -156,6 +180,19 @@ const TASK_INSTRUCTIONS: Record<string, string> = {
   SR: 'ACTIVE TASK — Update sound requirements: The user wants to update sound requirements. ALWAYS call query_shows first — never trust conversation memory for the current DB state. Show the existing sound_requirements value explicitly (e.g. "Sound requirements currently: DPA 4099 on violin. Overwrite with X?") before calling update_show. After update_show succeeds, call query_shows to verify the saved value, then confirm. Never say "already set" or "no change needed" without calling query_shows to confirm the current DB value.',
   Assign: 'ACTIVE TASK — Assign crew: The user wants to assign crew to a show. If a date was given, call get_crew_availability. If a show name was given, call query_shows first to find the date, then get_crew_availability.',
   Add: 'ACTIVE TASK — Add a new show: The user wants to add a show. Collect event_date, program, venue (required) from what they typed. If anything required is missing, ask. Once you have the minimum, call add_show, then immediately call get_crew_availability for the same date.',
+  DayOff: `ACTIVE TASK — Manage crew day-offs: The user wants to add, remove, or list day-offs for a crew member.
+
+Day-off rules (follow exactly):
+1. Cross-reference the crew name against this known list: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3. If the name is ambiguous or not found, ask the user to clarify before proceeding.
+2. Date expansion — if the user gives day numbers only (e.g. "1,4,6,9,12"):
+   - No month mentioned → use the current month to expand. Example: "Coni: 1,4,6" in May 2026 → 2026-05-01, 2026-05-04, 2026-05-06.
+   - Month explicitly mentioned (e.g. "June", "Jul", "next month") → use that month. Example: "Coni off 1,4,6 June" in May 2026 → 2026-06-01, 2026-06-04, 2026-06-06.
+   - "Next month" → use the month after the current one. Always construct full YYYY-MM-DD dates.
+3. Confirm before adding — show the expanded list in a readable format and ask "Adding day-offs for [Name]: [1 May, 4 May …] — confirm?" Wait for the user's yes before calling manage_crew_dayoff with action=add.
+4. Confirm before removing — same pattern: list the dates and ask "Removing day-offs for [Name]: [dates] — confirm?" Wait for yes.
+5. For action=list — call manage_crew_dayoff immediately without confirmation.
+6. After a successful add/remove, summarise what was done: "Done. Added X day-offs for [Name]." or "Removed [dates] for [Name]."
+7. Correction handling — if the user replies with a change rather than a plain yes/confirm (e.g. "actually make it 1, 4, 7" or "remove the 4th"), this is a CORRECTION, not a confirmation. Do NOT call manage_crew_dayoff. Update the list with the correction, show the revised dates, and ask for confirmation again. Only call the tool when the user explicitly confirms the final list.`,
 };
 
 export async function chatWithClaude(
@@ -221,6 +258,13 @@ TOOLS — use them every time, no exceptions:
 - Assign crew to an existing show (user says "assign crew to [show]" or provides "FOH=..., Stage=...") → you MUST call query_shows first to find the show and get its ID, then call update_show with the crew. Never say "Done" or "Assigned" until update_show has been called and returned success. Do NOT list available crew as text — call get_crew_availability to show the interactive picker card.
 - Update a show (sound requirements, call time, crew) → first call query_shows with the date and program name (do NOT ask for venue). If multiple shows are found, ask which one — always state each show's actual date (e.g. "18 May" or "19 May"), never just "today" or "tomorrow". If the field you are about to overwrite already has data, tell the user the current value and ask "Overwrite with X?" — wait for their reply. Once they confirm, call update_show with the show id and the new value. After update_show succeeds, call query_shows to verify the field was actually saved, then confirm with the verified value. Never say "Done" or "Updated" unless you have called update_show AND verified with query_shows.
 - Any pricing, quote, equipment cost → generate_quote (never quote prices from memory — the database is the source of truth)
+- Crew day-offs / unavailability (add, remove, list) → manage_crew_dayoff
+  - Day numbers only, no month → expand using current month (${today.slice(0, 7)})
+  - Day numbers with explicit month (e.g. "June", "Jul", "next month") → expand using that month, not the current one
+  - Always confirm the expanded list before action=add or action=remove
+  - action=list → call immediately, no confirmation needed
+  - Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3
+  - CORRECTION FLOW: if the user modifies any dates or name instead of simply confirming, do NOT call manage_crew_dayoff — update the list, re-show it, and ask "confirm?" again. Call the tool ONLY on an explicit yes/confirm to a confirmation question.
 - Quote items shorthand: "M4-2" or "2xM4" both mean 2x M4 — trailing dash-number or leading Nx are quantity markers. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
 - Unsure of an equipment name? Ask, don't guess.
 
@@ -323,6 +367,23 @@ FORMATTING:
         continue;
       }
 
+      // Guard 6: AI said day-offs were added/removed without calling manage_crew_dayoff
+      if (lastToolName !== 'manage_crew_dayoff' && loop < maxLoops - 1 &&
+          /\b(done|added|removed|set|day.?off.*saved|saved.*day.?off)\b/i.test(replyLower)) {
+        const prevAssistant = [...currentMessages].reverse().find((m: any) => m.role === 'assistant');
+        const prevText = extractText(prevAssistant?.content);
+        const dayOffConfirmPending = /confirm\?|day.?off.*confirm|adding day|removing day/i.test(prevText);
+        const isConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)\b/i.test(lastUserContent.trim());
+        if (dayOffConfirmPending && isConfirmation) {
+          currentMessages.push({ role: 'assistant', content: textContent });
+          currentMessages.push({ role: 'user', content: 'The user confirmed the day-offs. Call manage_crew_dayoff with the confirmed action and dates from the confirmation question above. Do not say Done until the tool returns success.' });
+          continue;
+        }
+      }
+
+      // Guard 7: day-off confirm was pending, user made a correction, but AI tried to call the tool without re-confirming
+      // (handled in the tool-call branch below — see correction intercept)
+
       // Force quote card
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
         const normalizedItems = (lastToolResult.items || []).map((it: any) => ({
@@ -361,6 +422,20 @@ FORMATTING:
       // Verified update complete
       const taskDone = updateShowSucceeded && queryShowsCalledAfterUpdate;
       return { reply: textContent || 'Done.', taskDone };
+    }
+
+    // Guard 7: day-off confirm was pending, user sent a correction (not a plain yes), but AI
+    // is about to call manage_crew_dayoff — intercept and force a re-confirmation instead.
+    if (loop === 0 && toolUseBlocks.some((b: any) => b.name === 'manage_crew_dayoff' && b.input?.action !== 'list')) {
+      const prevAssistant = [...currentMessages].reverse().find((m: any) => m.role === 'assistant');
+      const prevText = extractText(prevAssistant?.content);
+      const dayOffConfirmPending = /confirm\?|day.?off.*confirm|adding day|removing day/i.test(prevText);
+      const isPlainConfirmation = /^(yes|yeah|yep|yup|ok|okay|sure|go ahead|do it|confirm|correct|right|proceed|absolutely|sounds good)[.!]?\s*$/i.test(lastUserContent.trim());
+      if (dayOffConfirmPending && !isPlainConfirmation) {
+        // User made a correction, not a confirmation — stop the tool call, ask AI to revise and re-confirm
+        currentMessages.push({ role: 'user', content: "The user made a correction to the dates, not a confirmation. Do NOT call manage_crew_dayoff yet. Update the date list based on their correction, show the revised list, and ask 'confirm?' again." });
+        continue;
+      }
     }
 
     // Has tool calls — push assistant message preserving full content blocks
@@ -511,6 +586,20 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
 
       case 'generate_quote': {
         return await generateEquipmentQuote(args.items, orchestrator);
+      }
+
+      case 'manage_crew_dayoff': {
+        const { action, crew_name, dates } = args;
+        if (action === 'list') {
+          return await orchestrator.listDayOffs(crew_name);
+        } else if (action === 'add') {
+          if (!dates || dates.length === 0) return { error: 'dates[] required for add' };
+          return await orchestrator.addDayOffs(crew_name, dates);
+        } else if (action === 'remove') {
+          if (!dates || dates.length === 0) return { error: 'dates[] required for remove' };
+          return await orchestrator.removeDayOffs(crew_name, dates);
+        }
+        return { error: `Unknown action: ${action}` };
       }
 
       default:

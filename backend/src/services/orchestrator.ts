@@ -68,4 +68,23 @@ export class OrchestratorClient {
       body: JSON.stringify(data),
     });
   }
+
+  async listDayOffs(crewName?: string) {
+    const params = crewName ? `?crew_name=${encodeURIComponent(crewName)}` : '';
+    return this.fetch(`/api/crew/dayoffs${params}`);
+  }
+
+  async addDayOffs(crewName: string, dates: string[], reason?: string) {
+    return this.fetch('/api/crew/dayoffs', {
+      method: 'POST',
+      body: JSON.stringify({ crew_name: crewName, dates, reason }),
+    });
+  }
+
+  async removeDayOffs(crewName: string, dates: string[]) {
+    return this.fetch('/api/crew/dayoffs', {
+      method: 'DELETE',
+      body: JSON.stringify({ crew_name: crewName, dates }),
+    });
+  }
 }
