@@ -304,6 +304,7 @@ FORMATTING:
   // Verification state — track whether update_show ran and if we've re-queried to confirm
   let updateShowSucceeded = false;
   let queryShowsCalledAfterUpdate = false;
+  let manageDayOffSucceeded = false;
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetch(CLAUDE_API_URL, {
@@ -419,7 +420,7 @@ FORMATTING:
       }
 
       // Verified update complete
-      const taskDone = updateShowSucceeded && queryShowsCalledAfterUpdate;
+      const taskDone = (updateShowSucceeded && queryShowsCalledAfterUpdate) || manageDayOffSucceeded;
       return { reply: textContent || 'Done.', taskDone };
     }
 
@@ -455,6 +456,9 @@ FORMATTING:
       }
       if (toolBlock.name === 'query_shows' && updateShowSucceeded) {
         queryShowsCalledAfterUpdate = true;
+      }
+      if (toolBlock.name === 'manage_crew_dayoff' && result?.success) {
+        manageDayOffSucceeded = true;
       }
     }
 
