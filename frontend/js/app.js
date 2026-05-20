@@ -165,6 +165,7 @@ const SLASH_COMMANDS = [
   { cmd: '/update-CT',    desc: 'Update call time',        prefix: 'CT: ',     taskType: 'CT' },
   { cmd: '/update-sound', desc: 'Update sound requirements', prefix: 'SR: ',   taskType: 'SR' },
   { cmd: '/quote',        desc: 'Build an equipment quote',  prefix: 'Quote — Items: ', taskType: 'Quote' },
+  { cmd: '/day-off',      desc: 'Manage crew day-offs',      prefix: 'Day-off — Crew: ', taskType: 'DayOff' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
