@@ -174,6 +174,20 @@ async function handleAssignCrewMessage(
   return null;
 }
 
+async function handleDeleteShowMessage(
+  userContent: string,
+  orchestrator: OrchestratorClient,
+): Promise<{ reply: string; taskDone: boolean } | null> {
+  const m = userContent.match(/^Confirm delete show #(\d+)$/i);
+  if (!m) return null;
+  const id = Number(m[1]);
+  const result = (await orchestrator.deleteShow(id)) as any;
+  if (!result?.success) {
+    return { reply: `Couldn't delete that: ${result?.error || 'unknown error'}`, taskDone: false };
+  }
+  return { reply: `Gone. Show #${id} wiped from the books.`, taskDone: true };
+}
+
 export async function chatWithClaude(
   messages: any[],
   orchestrator: OrchestratorClient,
@@ -190,6 +204,7 @@ export async function chatWithClaude(
     Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
     Add: 'ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving, call get_crew_availability for that date.',
     Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
+    Delete: 'ACTIVE TASK — Delete a show. Call query_shows to find it by whatever the user gave (name, date, or both). Surface the show card — it has a Delete button the user presses to confirm. If the show is in the past, flag it first: "That one\'s already happened — still want to delete it?" Wait for yes before surfacing. Do NOT call any delete endpoint yourself.',
     DayOff: `ACTIVE TASK — Manage crew day-offs.
 
 1. Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3. If ambiguous, ask first.
@@ -209,6 +224,9 @@ export async function chatWithClaude(
     : extractText(lastUserMsg?.content);
   const assignResult = await handleAssignCrewMessage(rawLastContent, orchestrator);
   if (assignResult !== null) return assignResult;
+
+  const deleteResult = await handleDeleteShowMessage(rawLastContent, orchestrator);
+  if (deleteResult !== null) return deleteResult;
 
   // Strip task prefix so Claude sees "yes" not "SR: yes" — prevents re-interpreting
   // a confirmation as a new task request (e.g. "SR: yes" → "yes").
@@ -267,6 +285,7 @@ update_show: patch a show's fields (needs show ID from query_shows). Before over
 get_crew_availability: crew status for a date. Call this for ANY question about who's available, who to assign, or who's working a show. The backend renders the result as an interactive picker card — never generate crew data or crew JSON yourself, and never list crew as plain text. The card only appears when this tool is called.
 generate_quote: price equipment from the DB via fuzzy matching. Call with whatever the user named — don't pre-filter or ask for clarification. Outputs the quote card. Never quote prices from memory or training data — rates live in the database and change.
 manage_crew_dayoff: add/remove/list crew unavailability. Confirm before add/remove (show dates, ask once). list → call immediately. Never answer day-off questions from conversation memory — always call the tool for current data.
+delete/remove a show → call query_shows to find it and surface the card. The card has a Delete button — never call a delete endpoint yourself.
 
 Quantity shorthand: "M4-2", "2xM4", "2 M4" → 2× M4. Pass as ["2 M4", "5 SM58"] — quantity first.
 Call time = when crew reports, not show start time. Never call it "show time".
@@ -276,7 +295,7 @@ SHOW DISPLAY:
 - One or two specific fields → plain conversational reply, values from tool result only.
 - Three or more fields, or a general overview → one short quip in Eddy's voice, then the JSON card:
 \`\`\`json
-{"type":"shows","shows":[{"event_date":"...","program":"...","venue":"...","call_time":"...","foh_crew":"...","stage_crew":"...","sound_requirements":"..."}]}
+{"type":"shows","shows":[{"id":0,"event_date":"...","program":"...","venue":"...","call_time":"...","foh_crew":"...","stage_crew":"...","sound_requirements":"..."}]}
 \`\`\`
   Use empty string "" for genuinely null/empty fields.
 - If nearbySearch is true: mention the actual date found. "Nothing on the 26th — it's the 28th."
@@ -367,7 +386,8 @@ FORMATTING:
         return { reply: quip ? `${quip}\n${crewJson}` : crewJson, taskDone: true };
       }
 
-      const taskDone = updateShowSucceeded || manageDayOffSucceeded;
+      const taskDone = updateShowSucceeded || manageDayOffSucceeded
+        || (lastToolName === 'query_shows' && activeTask?.type === 'Delete');
       return { reply: textContent || 'Done.', taskDone };
     }
 

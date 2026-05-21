@@ -166,6 +166,7 @@ const SLASH_COMMANDS = [
   { cmd: '/update-sound', desc: 'Update sound requirements', prefix: 'SR: ',   taskType: 'SR' },
   { cmd: '/quote',        desc: 'Build an equipment quote',  prefix: 'Quote — Items: ', taskType: 'Quote' },
   { cmd: '/day-off',      desc: 'Manage crew day-offs',      prefix: 'Day-off — Crew: ', taskType: 'DayOff' },
+  { cmd: '/delete-show',  desc: 'Delete a show',             prefix: 'Delete: ',          taskType: 'Delete' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
@@ -381,6 +382,9 @@ function renderStructured(data) {
   if (data.type === 'crew_availability') {
     attachCrewListeners(data, div);
   }
+  if (data.type === 'shows') {
+    attachShowDeleteListeners(div);
+  }
 }
 
 function renderCrewPicker(data) {
@@ -542,6 +546,16 @@ function attachCrewListeners(data, container) {
       addMsg('assistant', 'Crew assignment skipped. You can assign later by saying "Assign crew to [show]."');
     });
   }
+}
+
+function attachShowDeleteListeners(container) {
+  container.querySelectorAll('.del-show-btn').forEach(function(btn) {
+    btn.addEventListener('click', function() {
+      var showId = btn.dataset.showId;
+      textInp.value = 'Confirm delete show #' + showId;
+      sendMessage();
+    });
+  });
 }
 
 function renderQuote(data) {
@@ -723,6 +737,9 @@ function renderShowList(data) {
     h += '<div style="font-size:13px">' + metaRow.join(' &nbsp;·&nbsp; ') + '</div>';
     if (s.sound_requirements) {
       h += '<div style="font-size:12px;color:var(--muted);margin-top:4px">Sound: ' + escapeHtml(s.sound_requirements) + '</div>';
+    }
+    if (s.id) {
+      h += '<button class="del-show-btn" data-show-id="' + s.id + '" style="margin-top:10px;padding:6px 14px;font-size:12px;font-weight:600;color:#fff;background:#c0392b;border:none;border-radius:8px;cursor:pointer;letter-spacing:0.2px">&#128465; Delete Show</button>';
     }
     h += '</div>';
   }

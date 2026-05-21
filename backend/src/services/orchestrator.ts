@@ -87,4 +87,8 @@ export class OrchestratorClient {
       body: JSON.stringify({ crew_name: crewName, dates }),
     });
   }
+
+  async deleteShow(id: number) {
+    return this.fetch(`/api/shows/${id}`, { method: 'DELETE' });
+  }
 }
