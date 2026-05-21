@@ -214,6 +214,25 @@ export async function chatWithClaude(
   const assignResult = await handleAssignCrewMessage(rawLastContent, orchestrator);
   if (assignResult !== null) return assignResult;
 
+  // Auto-detect task prefix if frontend didn't send activeTask (e.g. user typed SR: manually
+  // after the previous task cleared state, or the tab was refreshed mid-session).
+  if (!activeTask) {
+    const knownPrefixes: Array<{ prefix: string; type: string }> = [
+      { prefix: 'SR: ', type: 'SR' },
+      { prefix: 'CT: ', type: 'CT' },
+      { prefix: 'Add: ', type: 'Add' },
+      { prefix: 'Assign: ', type: 'Assign' },
+      { prefix: 'Quote — Items: ', type: 'Quote' },
+      { prefix: 'DayOff — Crew: ', type: 'DayOff' },
+    ];
+    for (const kp of knownPrefixes) {
+      if (rawLastContent.startsWith(kp.prefix)) {
+        activeTask = { type: kp.type, prefix: kp.prefix };
+        break;
+      }
+    }
+  }
+
   // Strip task prefix so Claude sees "yes" not "SR: yes" — prevents re-interpreting
   // a confirmation as a new task request (e.g. "SR: yes" → "yes").
   const prefixToStrip = activeTask?.prefix || '';
