@@ -174,25 +174,6 @@ async function handleAssignCrewMessage(
   return null;
 }
 
-// Task-specific system prompt injections keyed by activeTask.type
-const TASK_INSTRUCTIONS: Record<string, string> = {
-  CT: 'ACTIVE TASK — Update call time. Find the show from whatever the user gave (name, date, or both, any order). Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question.',
-  SR: 'ACTIVE TASK — Update sound requirements. Find the show from whatever the user gave (name, date, or both, any order). Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question.',
-  Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
-  Add: 'ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving, call get_crew_availability for that date.',
-  Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
-  DayOff: `ACTIVE TASK — Manage crew day-offs.
-
-1. Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3. If ambiguous, ask first.
-2. Date expansion — day numbers only:
-   - No month → current month (${new Date(Date.now() + (5*60+30)*60000).toISOString().slice(0,7)})
-   - Month named (e.g. "June", "next month") → use that month
-   Always construct full YYYY-MM-DD dates.
-3. action=add or remove → show expanded list, ask "confirm?" once. Wait for yes.
-4. action=list → call immediately, no confirmation.
-5. If user corrects the dates instead of confirming → update the list, re-show, ask again. Do NOT call the tool on a correction.`,
-};
-
 export async function chatWithClaude(
   messages: any[],
   orchestrator: OrchestratorClient,
@@ -203,6 +184,24 @@ export async function chatWithClaude(
   const oneYearOut = new Date(nowIST.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
   const currentYear = nowIST.getUTCFullYear();
 
+  const TASK_INSTRUCTIONS: Record<string, string> = {
+    CT: 'ACTIVE TASK — Update call time. Find the show from whatever the user gave (name, date, or both, any order). Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question.',
+    SR: 'ACTIVE TASK — Update sound requirements. Find the show from whatever the user gave (name, date, or both, any order). Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question.',
+    Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
+    Add: 'ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving, call get_crew_availability for that date.',
+    Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
+    DayOff: `ACTIVE TASK — Manage crew day-offs.
+
+1. Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3. If ambiguous, ask first.
+2. Date expansion — day numbers only:
+   - No month → current month (${today.slice(0, 7)})
+   - Month named (e.g. "June", "next month") → use that month
+   Always construct full YYYY-MM-DD dates.
+3. action=add or remove → show expanded list, ask "confirm?" once. Wait for yes.
+4. action=list → call immediately, no confirmation.
+5. If user corrects the dates instead of confirming → update the list, re-show, ask again. Do NOT call the tool on a correction.`,
+  };
+
   // Short-circuit structured crew-assignment messages from the picker button
   const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
   const rawLastContent = typeof lastUserMsg?.content === 'string'
@@ -210,25 +209,6 @@ export async function chatWithClaude(
     : extractText(lastUserMsg?.content);
   const assignResult = await handleAssignCrewMessage(rawLastContent, orchestrator);
   if (assignResult !== null) return assignResult;
-
-  // Auto-detect task prefix if frontend didn't send activeTask (e.g. user typed SR: manually
-  // after the previous task cleared state, or the tab was refreshed mid-session).
-  if (!activeTask) {
-    const knownPrefixes: Array<{ prefix: string; type: string }> = [
-      { prefix: 'SR: ', type: 'SR' },
-      { prefix: 'CT: ', type: 'CT' },
-      { prefix: 'Add: ', type: 'Add' },
-      { prefix: 'Assign: ', type: 'Assign' },
-      { prefix: 'Quote — Items: ', type: 'Quote' },
-      { prefix: 'DayOff — Crew: ', type: 'DayOff' },
-    ];
-    for (const kp of knownPrefixes) {
-      if (rawLastContent.startsWith(kp.prefix)) {
-        activeTask = { type: kp.type, prefix: kp.prefix };
-        break;
-      }
-    }
-  }
 
   // Strip task prefix so Claude sees "yes" not "SR: yes" — prevents re-interpreting
   // a confirmation as a new task request (e.g. "SR: yes" → "yes").
