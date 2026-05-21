@@ -422,29 +422,33 @@ FORMATTING:
           rate: it.rate ?? it.unit_price ?? 0,
           lineTotal: it.amount ?? it.lineTotal ?? it.total ?? 0,
         }));
+        const quoteJson = `\`\`\`json\n${JSON.stringify({
+          type: 'quote',
+          items: normalizedItems,
+          subtotal: lastToolResult.subtotal,
+          gst: lastToolResult.gst,
+          total: lastToolResult.total,
+        })}\n\`\`\``;
+        const quip = textContent.trim();
         return {
-          reply: `\`\`\`json\n${JSON.stringify({
-            type: 'quote',
-            items: normalizedItems,
-            subtotal: lastToolResult.subtotal,
-            gst: lastToolResult.gst,
-            total: lastToolResult.total,
-          })}\n\`\`\``,
+          reply: quip ? `${quip}\n${quoteJson}` : quoteJson,
           taskDone: true,
         };
       }
 
       // Force crew picker card
       if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
+        const crewJson = `\`\`\`json\n${JSON.stringify({
+          type: 'crew_availability',
+          date: lastToolResult.date,
+          available: lastToolResult.available,
+          assigned: lastToolResult.assigned,
+          unavailable: lastToolResult.unavailable,
+          conflicts: lastToolResult.conflicts,
+        })}\n\`\`\``;
+        const quip = textContent.trim();
         return {
-          reply: `\`\`\`json\n${JSON.stringify({
-            type: 'crew_availability',
-            date: lastToolResult.date,
-            available: lastToolResult.available,
-            assigned: lastToolResult.assigned,
-            unavailable: lastToolResult.unavailable,
-            conflicts: lastToolResult.conflicts,
-          })}\n\`\`\``,
+          reply: quip ? `${quip}\n${crewJson}` : crewJson,
           taskDone: true,
         };
       }
