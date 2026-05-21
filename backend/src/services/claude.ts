@@ -264,7 +264,7 @@ TOOLS — what they do and when to use them:
 query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements. Show name with no date → search by program only (backend finds upcoming matches). Not found on exact date → widen ±7 days, no need to ask.
 add_show: create a new show. Minimum: event_date, program, venue. Don't ask for call_time if not given. After saving, call get_crew_availability for the same date.
 update_show: patch a show's fields (needs show ID from query_shows). Before overwriting a field that already has data, show the current value and get confirmation. After it succeeds, confirm briefly — that's it.
-get_crew_availability: crew status for a date. Always renders as an interactive picker card — never list crew as plain text.
+get_crew_availability: crew status for a date. Call this for ANY question about who's available, who to assign, or who's working a show. The backend renders the result as an interactive picker card — never generate crew data or crew JSON yourself, and never list crew as plain text. The card only appears when this tool is called.
 generate_quote: price equipment from the DB via fuzzy matching. Call with whatever the user named — don't pre-filter or ask for clarification. Outputs the quote card.
 manage_crew_dayoff: add/remove/list crew unavailability. Confirm before add/remove (show dates, ask once). list → call immediately.
 
