@@ -441,8 +441,9 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
   }
 
   function matchesProgram(program: string, needle: string): boolean {
-    const hay = (program || '').toLowerCase();
-    const words = needle.split(/\s+/).filter(w => w.length >= 3);
+    const normalize = (s: string) => s.toLowerCase().replace(/[''`]/g, '');
+    const hay = normalize(program || '');
+    const words = normalize(needle).split(/\s+/).filter(w => w.length >= 3);
     return words.length > 0 && words.some(w => hay.includes(w));
   }
 
