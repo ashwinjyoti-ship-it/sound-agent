@@ -441,17 +441,20 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
   }
 
   function matchesProgram(program: string, needle: string): boolean {
-    const hay = (program || '').toLowerCase();
-    const words = needle.split(/\s+/).filter(w => w.length >= 3);
-    return words.length > 0 && words.some(w => hay.includes(w));
+    const normalize = (s: string) => s.toLowerCase().replace(/[''`]/g, '').replace(/[–—\-]/g, ' ').replace(/\s+/g, ' ').trim();
+    const hay = normalize(program || '');
+    const words = normalize(needle).split(' ').filter(w => w.length >= 2);
+    if (words.length === 0) return hay.includes(normalize(needle));
+    return words.some(w => hay.includes(w));
   }
 
   try {
     switch (name) {
       case 'query_shows': {
-        // If no from date provided, search upcoming shows (today → 1 year out)
+        // If no from date provided, search by name: include 30 days of history + 1 year ahead
         if (!args.from) {
-          args.from = today;
+          const past30 = new Date(today); past30.setDate(past30.getDate() - 30);
+          args.from = args.program ? past30.toISOString().slice(0, 10) : today;
           if (!args.to) args.to = oneYearOut;
         }
 
