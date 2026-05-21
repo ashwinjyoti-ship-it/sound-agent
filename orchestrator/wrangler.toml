@@ -1,0 +1,21 @@
+name = "ncpa-orchestrator"
+main = "src/index.ts"
+compatibility_date = "2024-09-23"
+
+[[d1_databases]]
+binding = "DB_SOUND"
+database_name = "ncpa-sound"
+database_id = "8dd5bac9-26b7-45d7-94b3-7a013ec3e880"
+
+[[d1_databases]]
+binding = "DB_CREW"
+database_name = "ncpa-crew"
+database_id = "3bc26aff-d41b-4d7b-bb68-7b768d02dabf"
+
+[[d1_databases]]
+binding = "DB_INVENTORY"
+database_name = "ncpa-inventory"
+database_id = "31f4ae0d-10d7-4d50-b838-40361c15cd2a"
+
+# Deploy:  wrangler deploy
+# Secret:  wrangler secret put API_TOKEN
