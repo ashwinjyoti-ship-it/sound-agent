@@ -185,7 +185,15 @@ async function handleDeleteShowMessage(
   if (!result?.success) {
     return { reply: `Couldn't delete that: ${result?.error || 'unknown error'}`, taskDone: false };
   }
-  return { reply: `Gone. Show #${id} wiped from the books.`, taskDone: true };
+  const confirmations = [
+    'Gone.',
+    'Deleted.',
+    'Out of the system.',
+    'Done. It\'s gone.',
+    'Removed. Clean slate.',
+  ];
+  const reply = confirmations[Math.floor(Math.random() * confirmations.length)];
+  return { reply, taskDone: true };
 }
 
 export async function chatWithClaude(
