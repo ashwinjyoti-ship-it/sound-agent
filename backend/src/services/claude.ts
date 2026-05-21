@@ -176,9 +176,20 @@ async function handleAssignCrewMessage(
 
 // Task-specific system prompt injections keyed by activeTask.type
 const TASK_INSTRUCTIONS: Record<string, string> = {
-  CT: 'ACTIVE TASK — Update call time: Parse the user\'s message as "[show name or date], [new call time]" — the first part identifies the show, the remainder is the new call time. Call query_shows using the show name as program (no date required — backend finds upcoming shows). Show the existing call_time and ask "Overwrite with [new time]?" before calling update_show. After update_show succeeds, call query_shows to verify the saved call_time, then confirm with the actual saved value.',
-  SR: 'ACTIVE TASK — Update sound requirements: Parse the user\'s message as "[show name or date], [new sound requirements]" — everything before the first comma (or the whole message if no comma) identifies the show; everything after is the new requirements text. Call query_shows using the show name as the program parameter with no date (backend finds upcoming shows automatically). Show the existing sound_requirements value explicitly before calling update_show. After update_show succeeds, call query_shows to verify the saved value, then confirm. Never say "already set" or "no change needed" without calling query_shows to confirm the current DB value.',
-  Assign: 'ACTIVE TASK — Assign crew: The user wants to assign crew to a show. If a date was given, call get_crew_availability. If a show name was given, call query_shows first to find the date, then get_crew_availability.',
+  CT: `ACTIVE TASK — Update call time: Intent is clear — the user wants to change a call time. Their message may contain a show name, a date, a new call time, or any combination in any order. Do not require a specific format.
+- If both show and new call time are identifiable → call query_shows to find the show, show the current call_time, ask "Overwrite with [new time]?" then update.
+- If show is clear but no new time given → find the show, show the current call_time, ask what to change it to. One question only.
+- If show is ambiguous → ask which show, one question. Once answered, proceed.
+After update_show succeeds, verify with query_shows and confirm. Eddy's voice throughout — terse, dry, no fuss.`,
+  SR: `ACTIVE TASK — Update sound requirements: Intent is clear — the user wants to update sound requirements for a show. Their message may contain a show name, a date, new requirements text, or any mix in any order. Do not require a specific format.
+- If both show and new requirements are identifiable → call query_shows to find the show, show the current sound_requirements, ask "Overwrite with [new value]?" then update.
+- If show is clear but no new requirements given → find the show, show the current sound_requirements, ask what to change it to. One question only.
+- If show is ambiguous → ask which show, one question. Once answered, proceed.
+After update_show succeeds, verify with query_shows and confirm. Never say "already set" or "no change needed" without checking query_shows first. Eddy's voice throughout — terse, dry, no fuss.`,
+  Assign: `ACTIVE TASK — Assign crew: Intent is clear — the user wants to assign crew to a show. Their message may contain a show name, a date, or both in any order. Do not require a specific format.
+- If show is identifiable → call query_shows to find the show and its ID, then immediately call get_crew_availability for that date to show the interactive picker. Do NOT list crew as plain text.
+- If show is ambiguous → ask which show, one question. Once answered, proceed.
+Eddy's voice throughout — terse, dry, no fuss.`,
   Add: 'ACTIVE TASK — Add a new show: The user wants to add a show. Collect event_date, program, venue (required) from what they typed. If anything required is missing, ask. Once you have the minimum, call add_show, then immediately call get_crew_availability for the same date.',
   Quote: 'ACTIVE TASK — Generate equipment hire quote: Call generate_quote immediately with the item names and quantities from the user\'s message. Do not ask for clarification on item names — the tool handles fuzzy matching and will report anything it cannot match.',
   DayOff: `ACTIVE TASK — Manage crew day-offs: The user wants to add, remove, or list day-offs for a crew member.
