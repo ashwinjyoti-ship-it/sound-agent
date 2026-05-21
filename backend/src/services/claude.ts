@@ -180,6 +180,7 @@ const TASK_INSTRUCTIONS: Record<string, string> = {
   SR: 'ACTIVE TASK — Update sound requirements: The user wants to update sound requirements. Call query_shows to find the show (if only a name was given, search without a date). Always state the current sound_requirements value explicitly (e.g. "Sound requirements currently: DPA 4099 on violin. Overwrite with X?") before calling update_show. After update_show succeeds, call query_shows to verify, then confirm.',
   Assign: 'ACTIVE TASK — Assign crew: The user wants to assign crew to a show. If a date was given, call get_crew_availability. If a show name was given, call query_shows first to find the date, then get_crew_availability.',
   Add: 'ACTIVE TASK — Add a new show: The user wants to add a show. Collect event_date, program, venue (required) from what they typed. If anything required is missing, ask. Once you have the minimum, call add_show, then immediately call get_crew_availability for the same date.',
+  Quote: 'ACTIVE TASK — Generate equipment hire quote: Call generate_quote immediately with the item names and quantities from the user\'s message. Do not ask for clarification on item names — the tool handles fuzzy matching and will report anything it cannot match.',
   DayOff: `ACTIVE TASK — Manage crew day-offs: The user wants to add, remove, or list day-offs for a crew member.
 
 Day-off rules (follow exactly):
