@@ -284,7 +284,7 @@ GDT / Godrej / Godrej Dance / Godrej Dance Theatre → Godrej Dance Theatre
 
 TOOLS — what they do and when to use them:
 query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements — including follow-up questions about a show already discussed earlier in the conversation. Never answer from conversation memory; always re-query for current values. Show name with no date → search by program only (backend finds upcoming matches). Not found on exact date → widen ±7 days, no need to ask.
-add_show: create a new show. Minimum: event_date, program, venue. Don't ask for call_time if not given. After saving, call get_crew_availability for the same date.
+add_show: create a new show. Minimum: event_date, program, venue. Don't ask for call_time if not given. After saving, call get_crew_availability for the same date. The backend will render a show card automatically — do not confirm in text.
 update_show: patch a show's fields. Always call query_shows immediately before this — even if you have the show ID from earlier in the conversation — to get current field values. Never assume a field is empty from context; the data may have changed. Show existing values for any field being overwritten and get confirmation. After it succeeds, confirm briefly — that's it.
 get_crew_availability: crew status for a date. Call this for ANY question about who's available, who to assign, or who's working a show. The backend renders the result as an interactive picker card — never generate crew data or crew JSON yourself, and never list crew as plain text. The card only appears when this tool is called.
 generate_quote: price equipment from the DB via fuzzy matching. Call with whatever the user named — don't pre-filter or ask for clarification. Outputs the quote card. Never quote prices from memory or training data — rates live in the database and change.
@@ -327,6 +327,7 @@ FORMATTING:
   let lastToolResult: any = null;
   let updateShowSucceeded = false;
   let manageDayOffSucceeded = false;
+  let addShowArgs: any = null;
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetch(CLAUDE_API_URL, {
@@ -357,6 +358,21 @@ FORMATTING:
     const textContent = extractText(data.content);
 
     if (toolUseBlocks.length === 0) {
+      // Build show card from add_show args, prepended to whatever follows
+      const addShowCard = addShowArgs ? `\`\`\`json\n${JSON.stringify({
+        type: 'shows',
+        shows: [{
+          id: 0,
+          event_date: addShowArgs.event_date || '',
+          program: addShowArgs.program || '',
+          venue: addShowArgs.venue || '',
+          call_time: addShowArgs.call_time || '',
+          foh_crew: addShowArgs.foh_crew || '',
+          stage_crew: addShowArgs.stage_crew || '',
+          sound_requirements: addShowArgs.sound_requirements || '',
+        }],
+      })}\n\`\`\`` : null;
+
       // Force quote card (rendering requirement — frontend needs the JSON shape)
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
         const normalizedItems = (lastToolResult.items || []).map((it: any) => ({
@@ -386,13 +402,14 @@ FORMATTING:
           unavailable: lastToolResult.unavailable,
           conflicts: lastToolResult.conflicts,
         })}\n\`\`\``;
-        const quip = textContent.trim();
-        return { reply: quip ? `${quip}\n${crewJson}` : crewJson, taskDone: true };
+        const parts = [addShowCard, textContent.trim() || null, crewJson].filter(Boolean);
+        return { reply: parts.join('\n'), taskDone: true };
       }
 
       const taskDone = updateShowSucceeded || manageDayOffSucceeded
         || (lastToolName === 'query_shows' && activeTask?.type === 'Delete');
-      return { reply: textContent || 'Done.', taskDone };
+      const baseParts = [addShowCard, textContent || (addShowCard ? null : 'Done.')].filter(Boolean);
+      return { reply: baseParts.join('\n'), taskDone: taskDone || !!addShowCard };
     }
 
     // Has tool calls — push assistant message preserving full content blocks
@@ -408,6 +425,7 @@ FORMATTING:
 
       if (toolBlock.name === 'update_show' && result?.success) updateShowSucceeded = true;
       if (toolBlock.name === 'manage_crew_dayoff' && result?.success) manageDayOffSucceeded = true;
+      if (toolBlock.name === 'add_show' && result?.success) addShowArgs = toolBlock.input;
     }
 
     // Push all results as a single user message (Anthropic requires this)
