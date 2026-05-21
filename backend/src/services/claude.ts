@@ -180,6 +180,7 @@ const TASK_INSTRUCTIONS: Record<string, string> = {
   SR: 'ACTIVE TASK — Update sound requirements: The user wants to update sound requirements. ALWAYS call query_shows first — never trust conversation memory for the current DB state. Show the existing sound_requirements value explicitly (e.g. "Sound requirements currently: DPA 4099 on violin. Overwrite with X?") before calling update_show. After update_show succeeds, call query_shows to verify the saved value, then confirm. Never say "already set" or "no change needed" without calling query_shows to confirm the current DB value.',
   Assign: 'ACTIVE TASK — Assign crew: The user wants to assign crew to a show. If a date was given, call get_crew_availability. If a show name was given, call query_shows first to find the date, then get_crew_availability.',
   Add: 'ACTIVE TASK — Add a new show: The user wants to add a show. Collect event_date, program, venue (required) from what they typed. If anything required is missing, ask. Once you have the minimum, call add_show, then immediately call get_crew_availability for the same date.',
+  Quote: 'ACTIVE TASK — Generate equipment hire quote: Call generate_quote immediately with the item names and quantities from the user\'s message. Do not ask for clarification on item names — the tool handles fuzzy matching and will report anything it cannot match.',
   DayOff: `ACTIVE TASK — Manage crew day-offs: The user wants to add, remove, or list day-offs for a crew member.
 
 Day-off rules (follow exactly):
@@ -207,11 +208,18 @@ export async function chatWithClaude(
 
   // Short-circuit structured crew-assignment messages from the picker button
   const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
-  const lastUserContent = typeof lastUserMsg?.content === 'string'
+  const rawLastContent = typeof lastUserMsg?.content === 'string'
     ? lastUserMsg.content
     : extractText(lastUserMsg?.content);
-  const assignResult = await handleAssignCrewMessage(lastUserContent, orchestrator);
+  const assignResult = await handleAssignCrewMessage(rawLastContent, orchestrator);
   if (assignResult !== null) return assignResult;
+
+  // Strip task prefix so Claude sees "yes" not "SR: yes" — prevents re-interpreting
+  // a confirmation as a new task request (e.g. "SR: yes" → "yes").
+  const prefixToStrip = activeTask?.prefix || '';
+  const lastUserContent = prefixToStrip && rawLastContent.startsWith(prefixToStrip)
+    ? rawLastContent.slice(prefixToStrip.length).trimStart()
+    : rawLastContent;
 
   const taskInstruction = activeTask ? (TASK_INSTRUCTIONS[activeTask.type] || '') : '';
 
@@ -265,8 +273,8 @@ TOOLS — use them every time, no exceptions:
   - action=list → call immediately, no confirmation needed
   - Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3
   - CORRECTION FLOW: if the user modifies any dates or name instead of simply confirming, do NOT call manage_crew_dayoff — update the list, re-show it, and ask "confirm?" again. Call the tool ONLY on an explicit yes/confirm to a confirmation question.
-- Quote items shorthand: "M4-2" or "2xM4" both mean 2x M4 — trailing dash-number or leading Nx are quantity markers. Pass items as ["2 M4", "5 SM58", etc.] so quantity comes first.
-- Unsure of an equipment name? Ask, don't guess.
+- Quote items: always call generate_quote with whatever the user names — the tool handles fuzzy matching and returns unmatched items if something doesn't exist. Never pre-filter or refuse to call the tool because you don't recognise a name.
+- Quantity shorthand: "M4-2" or "2xM4" or "2 M4" all mean 2× M4. Pass as ["2 M4", "5 SM58", etc.] — quantity first, then item name.
 
 CALL TIME — important distinction:
 Call time is when the sound crew reports in, not the show's performance start time. These are different. When displaying or discussing call time, never describe it as "show time" or "performance time". If someone asks "when do we report?" or "what's the call?" — that's call time.
@@ -296,7 +304,12 @@ FORMATTING:
 - Plain text only; line breaks are fine
 - Concise always`;
 
-  let currentMessages = [...messages];
+  let currentMessages = messages.map((m: any) => {
+    if (prefixToStrip && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith(prefixToStrip)) {
+      return { ...m, content: m.content.slice(prefixToStrip.length).trimStart() };
+    }
+    return m;
+  });
   const maxLoops = 6;
   let lastToolName: string | null = null;
   let lastToolResult: any = null;
@@ -365,6 +378,15 @@ FORMATTING:
           /update|set|change|save|assign|overwrite/i.test(lastUserLower)) {
         currentMessages.push({ role: 'assistant', content: textContent });
         currentMessages.push({ role: 'user', content: 'update_show was never called — do not rely on conversation memory. Call query_shows to get the current DB state, then call update_show to save the changes. Do not say Done until update_show returns success.' });
+        continue;
+      }
+
+      // Guard: quote requested but AI responded with text instead of calling generate_quote
+      if (lastToolName !== 'generate_quote' && loop < maxLoops - 1 &&
+          /quote.*items|items.*quote|quote.*equipment|price.*for|cost.*for|rate.*for/i.test(lastUserContent) &&
+          /clarif|which.*item|what.*item|can.*you.*specify|don.*t.*have|not.*recogni|not.*find|can.*t.*find/i.test(replyLower)) {
+        currentMessages.push({ role: 'assistant', content: textContent });
+        currentMessages.push({ role: 'user', content: 'Call generate_quote with the item names exactly as the user stated them. The tool does fuzzy matching — do not ask for clarification before calling it.' });
         continue;
       }
 
@@ -694,8 +716,9 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
         : 1;
 
     const itemNorm = item
-      .replace(/^\d+\s*[xX×]\s*/, '')
-      .replace(/\s*[-xX×]\s*\d+$/, '')
+      .replace(/^\d+\s*[xX×]\s*/, '')   // "4xM4" or "4 x M4"
+      .replace(/^\d+\s+/, '')            // "4 M4" (space format from Claude)
+      .replace(/\s*[-xX×]\s*\d+$/, '')   // "M4-4" or "M4x4" trailing qty
       .trim();
     const itemLower = itemNorm.toLowerCase();
     const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0 && !/^\d+$/.test(w));
@@ -737,7 +760,7 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
       success: false,
       error: 'No equipment matched from quote database',
       unmatched,
-      available_equipment: equipList.slice(0, 10).map((e: any) => e.name),
+      available_equipment: equipList.map((e: any) => e.name),
     };
   }
 
