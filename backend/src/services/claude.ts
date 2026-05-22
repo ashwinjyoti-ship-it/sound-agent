@@ -534,7 +534,7 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
           }
         }
 
-        const result = (await orchestrator.getShows({ from: args.from, to })) as any;
+        const result = (await orchestrator.getShows({ from: args.from, to, limit: args.program ? 500 : undefined })) as any;
 
         if (args.venue && result?.data?.length) {
           result.data = result.data.filter((s: any) => venueMatches(s.venue, args.venue));
