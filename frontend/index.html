@@ -122,9 +122,20 @@
 
     /* Input bar */
     .input-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--surface);backdrop-filter:blur(18px);border-top:1px solid var(--border);padding:6px 14px calc(6px + var(--safe-bottom));display:flex;gap:8px;align-items:center;box-sizing:border-box}
-    /* PWA standalone — no browser chrome, tighter toolbar with frosted glass */
+    /* PWA standalone — dark bookend toolbar matching the header */
     @media(display-mode:standalone){
-      .input-bar{background:rgba(245,237,224,0.82);backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);border-top:1px solid rgba(212,122,49,0.25);box-shadow:0 -4px 20px rgba(30,32,34,0.08);padding-top:4px}
+      .input-bar{
+        background:#1A1916;
+        background-image:repeating-linear-gradient(90deg, transparent 0px, transparent 6px, rgba(224,123,32,0.28) 6px, rgba(224,123,32,0.28) 7px);
+        backdrop-filter:none;-webkit-backdrop-filter:none;
+        border-top:3px solid var(--primary);
+        box-shadow:0 -2px 20px rgba(30,32,34,0.45);
+        padding-top:8px;
+      }
+      .input-bar .text-inp{background:rgba(255,255,255,0.08);border-color:rgba(255,255,255,0.15);color:#fff}
+      .input-bar .text-inp::placeholder{color:rgba(255,255,255,0.40)}
+      .input-bar .text-inp:focus{background:rgba(255,255,255,0.13);border-color:rgba(212,122,49,0.70);color:#fff}
+      .input-bar .send-btn{background:var(--primary)}
     }
     .mic-btn{width:40px;height:40px;border-radius:50%;border:none;background:var(--primary);color:#fff;font-size:18px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0;transition:opacity .2s}
     .mic-btn:active{opacity:.8}
