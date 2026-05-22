@@ -65,7 +65,8 @@ function syncViewportHeight() {
     document.documentElement.style.setProperty('--app-height', vv.height + 'px');
     // Push the fixed input bar above the keyboard
     var keyboardH = window.innerHeight - vv.height - vv.offsetTop;
-    if (inputBarEl) inputBarEl.style.bottom = Math.max(keyboardH, 0) + 'px';
+    // Only offset for real keyboards (>100px). PWA safe-area artefact is ~34px and must be ignored.
+    if (inputBarEl) inputBarEl.style.bottom = (keyboardH > 100 ? keyboardH : 0) + 'px';
   } else {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
   }
