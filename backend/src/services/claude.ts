@@ -39,11 +39,12 @@ const TOOLS = [
   },
   {
     name: 'update_show',
-    description: 'Update an existing show. Use this to add or edit sound requirements, call time, or crew. Only call this after the user has confirmed overwriting existing data.',
+    description: 'Update an existing show. Use this to add or edit venue, sound requirements, call time, or crew. Only call this after the user has confirmed overwriting existing data.',
     input_schema: {
       type: 'object',
       properties: {
         id: { type: 'number', description: 'Show ID number' },
+        venue: { type: 'string', description: 'New venue name — any free text, not restricted to standard venues' },
         sound_requirements: { type: 'string', description: 'Sound requirements text to set or update' },
         call_time: { type: 'string', description: 'Call time like 17:00 or 5:30pm' },
         foh_crew: { type: 'string', description: 'FOH engineer name' },
@@ -207,12 +208,14 @@ export async function chatWithClaude(
   const currentYear = nowIST.getUTCFullYear();
 
   const TASK_INSTRUCTIONS: Record<string, string> = {
-    CT: 'ACTIVE TASK — Update call time. Find the show from whatever the user gave (name, date, or both, any order). Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question.',
-    SR: 'ACTIVE TASK — Update sound requirements. Find the show from whatever the user gave (name, date, or both, any order). Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question.',
+    CT: 'ACTIVE TASK — Update call time. Find the show from whatever the user gave (name, date, or both, any order). Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
+    SR: 'ACTIVE TASK — Update sound requirements. Find the show from whatever the user gave (name, date, or both, any order). Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
+    Venue: 'ACTIVE TASK — Change venue. Find the show from whatever the user gave (name, date, or both). Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
     Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
     Add: 'ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving, call get_crew_availability for that date.',
     Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
     Delete: 'ACTIVE TASK — Delete a show. Call query_shows to find it by whatever the user gave (name, date, or both). Surface the show card — it has a Delete button the user presses to confirm. If the show is in the past, flag it first: "That one\'s already happened — still want to delete it?" Wait for yes before surfacing. Do NOT call any delete endpoint yourself.',
+    Crew: `ACTIVE TASK — Show crew availability. If a date is in the message, use it. If no date given, call get_crew_availability for today (${today}). After the picker, if no date was specified, add one line: "Or a different date?"`,
     DayOff: `ACTIVE TASK — Manage crew day-offs.
 
 1. Cross-reference crew name against: Naren, Sandeep, Coni, Nikhil, NS, Aditya, Viraj, Shridhar, Nazar, Omkar, Akshay, OC1, OC2, OC3. If ambiguous, ask first.
@@ -275,17 +278,18 @@ Rhythm matters. Short sentences land harder. Contrast carries more than explanat
 - Wit is conditional. Only fires when the situation has real irony. Never manufactured.
 - Anticipate the next obvious move once, briefly, if it saves a follow-up.
 
-VENUE NAMES — these are venues, never show names. Pass as the venue parameter:
+VENUE NAMES — these are venues, never show names. Expand shorthand when passing to query_shows; pass the user's exact words (or expanded form) to update_show — any venue is valid, not just NCPA standards:
 TT / Tata / Tata Theatre / TATA → Tata Theatre
 TET / Experimental / Experimental Theatre → Tata Experimental Theatre
 LT / Little Theatre → Little Theatre
 JBT / Jamshed Bhabha / Jamshed Bhabha Theatre → Jamshed Bhabha Theatre
 GDT / Godrej / Godrej Dance / Godrej Dance Theatre → Godrej Dance Theatre
+Any other venue name (e.g. "JBT Museum", "NCPA Lawns", "Mehli Mehta Hall") → pass as-is, no validation
 
 TOOLS — what they do and when to use them:
 query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements — including follow-up questions about a show already discussed earlier in the conversation. Never answer from conversation memory; always re-query for current values. Show name with no date → search by program only (backend finds upcoming matches). Not found on exact date → widen ±7 days, no need to ask.
 add_show: create a new show. Minimum: event_date, program, venue. Don't ask for call_time if not given. After saving, call get_crew_availability for the same date. The backend will render a show card automatically — do not confirm in text.
-update_show: patch a show's fields. Always call query_shows immediately before this — even if you have the show ID from earlier in the conversation — to get current field values. Never assume a field is empty from context; the data may have changed. Show existing values for any field being overwritten and get confirmation. After it succeeds, confirm briefly — that's it.
+update_show: patch a show's fields including venue (free text, any location). Always call query_shows immediately before this — even if you have the show ID from earlier in the conversation — to get current field values. Never assume a field is empty from context; the data may have changed. Show existing values for any field being overwritten and get confirmation. MULTI-DATE RUNS: if query_shows returns the same program across multiple dates, before patching ask "Just [specific date], or all [N] dates in this run ([date list])?" — then call update_show once per ID for the confirmed scope. After it succeeds, confirm briefly — that's it.
 get_crew_availability: crew status for a date. Call this for ANY question about who's available, who to assign, or who's working a show. The backend renders the result as an interactive picker card — never generate crew data or crew JSON yourself, and never list crew as plain text. The card only appears when this tool is called.
 generate_quote: price equipment from the DB via fuzzy matching. Call with whatever the user named — don't pre-filter or ask for clarification. Outputs the quote card. Never quote prices from memory or training data — rates live in the database and change.
 manage_crew_dayoff: add/remove/list crew unavailability. Confirm before add/remove (show dates, ask once). list → call immediately. Never answer day-off questions from conversation memory — always call the tool for current data.
@@ -545,6 +549,7 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
 
       case 'update_show': {
         const patch: any = {};
+        if (args.venue !== undefined) patch.venue = args.venue;
         if (args.sound_requirements !== undefined) patch.sound_requirements = args.sound_requirements;
         if (args.call_time !== undefined) patch.call_time = args.call_time;
         if (args.foh_crew !== undefined) patch.foh_crew = args.foh_crew;

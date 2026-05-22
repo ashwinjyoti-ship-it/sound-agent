@@ -159,14 +159,16 @@ function stopRecording() {
 
 // ─── Slash commands ───
 const SLASH_COMMANDS = [
-  { cmd: '/clear',        desc: 'Wipe the chat' },
-  { cmd: '/add-show',     desc: 'Add a show',              prefix: 'Add: ',    taskType: 'Add' },
-  { cmd: '/crew-assign',  desc: 'Assign crew to a show',   prefix: 'Assign: ', taskType: 'Assign' },
-  { cmd: '/update-CT',    desc: 'Update call time',        prefix: 'CT: ',     taskType: 'CT' },
-  { cmd: '/update-sound', desc: 'Update sound requirements', prefix: 'SR: ',   taskType: 'SR' },
-  { cmd: '/quote',        desc: 'Build an equipment quote',  prefix: 'Quote — Items: ', taskType: 'Quote' },
-  { cmd: '/day-off',      desc: 'Manage crew day-offs',      prefix: 'Day-off — Crew: ', taskType: 'DayOff' },
-  { cmd: '/delete-show',  desc: 'Delete a show',             prefix: 'Delete: ',          taskType: 'Delete' },
+  { cmd: '/clear',          desc: 'Wipe the chat' },
+  { cmd: '/add-show',       desc: 'Add a show',                prefix: 'Add: ',         taskType: 'Add' },
+  { cmd: '/crew',           desc: 'Check crew availability',   prefix: 'Crew: ',        taskType: 'Crew' },
+  { cmd: '/crew-assign',    desc: 'Assign crew to a show',     prefix: 'Assign: ',      taskType: 'Assign' },
+  { cmd: '/update-CT',      desc: 'Update call time',          prefix: 'CT: ',          taskType: 'CT' },
+  { cmd: '/update-sound',   desc: 'Update sound requirements', prefix: 'SR: ',          taskType: 'SR' },
+  { cmd: '/update-venue',   desc: 'Change show venue',         prefix: 'Venue: ',       taskType: 'Venue' },
+  { cmd: '/quote',          desc: 'Build an equipment quote',  prefix: 'Quote — Items: ', taskType: 'Quote' },
+  { cmd: '/day-off',        desc: 'Manage crew day-offs',      prefix: 'Day-off — Crew: ', taskType: 'DayOff' },
+  { cmd: '/delete-show',    desc: 'Delete a show',             prefix: 'Delete: ',      taskType: 'Delete' },
 ];
 
 const slashMenu = document.getElementById('slash-menu');
