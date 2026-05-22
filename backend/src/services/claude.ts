@@ -208,9 +208,9 @@ export async function chatWithClaude(
   const currentYear = nowIST.getUTCFullYear();
 
   const TASK_INSTRUCTIONS: Record<string, string> = {
-    CT: 'ACTIVE TASK — Update call time. Find the show from whatever the user gave (name, date, or both, any order). Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
-    SR: 'ACTIVE TASK — Update sound requirements. Find the show from whatever the user gave (name, date, or both, any order). Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
-    Venue: 'ACTIVE TASK — Change venue. Find the show from whatever the user gave (name, date, or both). Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
+    CT: 'ACTIVE TASK — Update call time. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
+    SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
+    Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
     Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
     Add: 'ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving, call get_crew_availability for that date.',
     Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
@@ -287,7 +287,7 @@ GDT / Godrej / Godrej Dance / Godrej Dance Theatre → Godrej Dance Theatre
 Any other venue name (e.g. "JBT Museum", "NCPA Lawns", "Mehli Mehta Hall") → pass as-is, no validation
 
 TOOLS — what they do and when to use them:
-query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements — including follow-up questions about a show already discussed earlier in the conversation. Never answer from conversation memory; always re-query for current values. Show name with no date → search by program only (backend finds upcoming matches). Not found on exact date → widen ±7 days, no need to ask.
+query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements — including follow-up questions about a show already discussed earlier in the conversation. Never answer from conversation memory; always re-query for current values. Show name with no date → pass program= only, omit from/to entirely — the backend searches 1 year back to 2 years forward automatically. Never ask the user for a date or alternate name when a show name has been given; just call the tool. Not found on an exact date → widen ±7 days, no need to ask.
 add_show: create a new show. Minimum: event_date, program, venue. Don't ask for call_time if not given. After saving, call get_crew_availability for the same date. The backend will render a show card automatically — do not confirm in text.
 update_show: patch a show's fields including venue (free text, any location). Always call query_shows immediately before this — even if you have the show ID from earlier in the conversation — to get current field values. Never assume a field is empty from context; the data may have changed. Show existing values for any field being overwritten and get confirmation. MULTI-DATE RUNS: if query_shows returns the same program across multiple dates, before patching ask "Just [specific date], or all [N] dates in this run ([date list])?" — then call update_show once per ID for the confirmed scope. After it succeeds, confirm briefly — that's it.
 get_crew_availability: crew status for a date. Call this for ANY question about who's available, who to assign, or who's working a show. The backend renders the result as an interactive picker card — never generate crew data or crew JSON yourself, and never list crew as plain text. The card only appears when this tool is called.
@@ -362,6 +362,20 @@ FORMATTING:
     const textContent = extractText(data.content);
 
     if (toolUseBlocks.length === 0) {
+      // Hallucination guard: on loop 0 with an active task that requires a DB lookup,
+      // if the AI claims nothing was found without having called any tool, force a retry.
+      if (loop === 0 && lastToolName === null && activeTask) {
+        const looksLikeHallucination = /nothing (in|on|found)|not in the (system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|not (listed|showing)/i.test(textContent);
+        if (looksLikeHallucination) {
+          currentMessages.push({ role: 'assistant', content: data.content });
+          currentMessages.push({
+            role: 'user',
+            content: [{ type: 'text', text: 'You answered without calling any tool. Call query_shows now — do not rely on memory or training data.' }],
+          });
+          continue;
+        }
+      }
+
       // Build show card from add_show args, prepended to whatever follows
       const addShowCard = addShowArgs ? `\`\`\`json\n${JSON.stringify({
         type: 'shows',
@@ -481,11 +495,15 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
   try {
     switch (name) {
       case 'query_shows': {
-        // If no from date provided, search by name: include 30 days of history + 1 year ahead
+        const programOnly = !args.from && !!args.program;
+
         if (!args.from) {
-          const past30 = new Date(today); past30.setDate(past30.getDate() - 30);
-          args.from = args.program ? past30.toISOString().slice(0, 10) : today;
-          if (!args.to) args.to = oneYearOut;
+          // Name-only search: scan 1 year back + 2 years forward so nothing is missed
+          const past1y = new Date(today); past1y.setFullYear(past1y.getFullYear() - 1);
+          const future2y = new Date(today); future2y.setFullYear(future2y.getFullYear() + 2);
+          const fmt = (d: Date) => d.toISOString().slice(0, 10);
+          args.from = args.program ? fmt(past1y) : today;
+          if (!args.to) args.to = args.program ? fmt(future2y) : oneYearOut;
         }
 
         const to = args.to || args.from;
@@ -512,8 +530,8 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
           );
         }
 
-        // If named show not found on requested date, search ±7 days
-        if (needle && (!result?.data || result.data.length === 0)) {
+        // If show not found AND a specific date was given, widen ±7 days around that date
+        if (needle && !programOnly && (!result?.data || result.data.length === 0)) {
           const base = new Date(args.from);
           const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
           const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
