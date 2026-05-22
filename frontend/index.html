@@ -39,17 +39,22 @@
     html{height:100%;-webkit-text-size-adjust:100%;overflow:hidden;overscroll-behavior:none}
     body{
       position:fixed;top:0;left:0;right:0;bottom:0;font-family:-apple-system,BlinkMacSystemFont,'Segoe UI',system-ui,sans-serif;
-      background:linear-gradient(155deg,#F5EDE0 0%,#FBF3E8 55%,#F0E4D0 100%);
+      background:
+        radial-gradient(ellipse 70% 50% at 15% 30%, rgba(212,122,49,0.30) 0%, transparent 65%),
+        radial-gradient(ellipse 55% 60% at 85% 70%, rgba(180,90,20,0.22) 0%, transparent 60%),
+        radial-gradient(ellipse 50% 40% at 50% 10%, rgba(252,208,143,0.25) 0%, transparent 55%),
+        linear-gradient(155deg,#F5EDE0 0%,#FBF3E8 55%,#F0E4D0 100%);
       color:var(--text);overflow:hidden;display:flex;flex-direction:column;overscroll-behavior:none
     }
     .app-bar{
       position:relative;z-index:50;flex:0 0 auto;
-      background:rgba(26,25,22,0.45);
-      background-image:radial-gradient(ellipse at 50% 0%, rgba(34,32,24,0.6) 0%, rgba(26,25,22,0) 60%), repeating-linear-gradient(90deg, transparent 0px, transparent 6px, rgba(224,123,32,0.12) 6px, rgba(224,123,32,0.12) 7px);
-      backdrop-filter:blur(28px) saturate(160%);-webkit-backdrop-filter:blur(28px) saturate(160%);
+      background:rgba(26,25,22,0.28);
+      background-image:radial-gradient(ellipse at 50% 0%, rgba(34,32,24,0.5) 0%, rgba(26,25,22,0) 60%), repeating-linear-gradient(90deg, transparent 0px, transparent 6px, rgba(224,123,32,0.14) 6px, rgba(224,123,32,0.14) 7px);
+      backdrop-filter:blur(40px) saturate(200%) brightness(0.95);-webkit-backdrop-filter:blur(40px) saturate(200%) brightness(0.95);
       border-bottom:3px solid var(--primary);
+      border-top:1px solid rgba(255,255,255,0.12);
       padding:calc(12px + var(--safe-top)) 20px 14px;
-      color:#fff;box-shadow:0 2px 20px rgba(30,32,34,0.40);
+      color:#fff;box-shadow:0 4px 32px rgba(30,32,34,0.45),inset 0 1px 0 rgba(255,255,255,0.12);
     }
     .app-bar-inner{display:flex;align-items:center;justify-content:center;gap:14px;max-width:640px;margin:0 auto}
     .header-mascot{height:72px;width:auto;flex-shrink:0;display:block}
@@ -65,9 +70,9 @@
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .msg-avatar-user{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--primary-light);color:#fff;align-self:flex-start;margin-top:4px}
     .msg-avatar-sa{width:90px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;overflow:visible;align-self:flex-start;padding-top:4px}
-    .msg-body{position:relative;flex:0 1 auto;max-width:75%;background:rgba(255,248,238,0.10);backdrop-filter:blur(32px) saturate(180%);-webkit-backdrop-filter:blur(32px) saturate(180%);border:1px solid rgba(212,122,49,0.45);border-radius:20px;padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:0 4px 24px rgba(30,32,34,0.10),inset 0 1px 0 rgba(255,255,255,0.18);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word}
+    .msg-body{position:relative;flex:0 1 auto;max-width:75%;background:rgba(255,255,255,0.06);backdrop-filter:blur(40px) saturate(200%) brightness(1.08);-webkit-backdrop-filter:blur(40px) saturate(200%) brightness(1.08);border:1px solid rgba(255,255,255,0.40);border-top:1px solid rgba(255,255,255,0.55);border-radius:20px;padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:0 8px 32px rgba(30,32,34,0.14),inset 0 1px 0 rgba(255,255,255,0.55),inset 0 -1px 0 rgba(212,122,49,0.08);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word}
     .msg-user{flex-direction:row-reverse}
-    .msg-user .msg-body{background:rgba(212,122,49,0.10)}
+    .msg-user .msg-body{background:rgba(212,122,49,0.10);border:1px solid rgba(255,200,120,0.45);border-top:1px solid rgba(255,220,150,0.55)}
     /* Agent bubble tail — points left toward mascot */
     .msg-assistant .msg-body::before{content:'';position:absolute;left:-10px;top:14px;width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-right:10px solid rgba(212,122,49,0.45)}
     .msg-assistant .msg-body::after{content:'';position:absolute;left:-8px;top:15px;width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-right:9px solid rgba(255,248,238,0.10)}
