@@ -258,7 +258,7 @@ Never ask for the month or year if you can infer it. Queries are conversational.
 
 CRITICAL: NEVER say "nothing on [date]" or "no shows" without first calling query_shows. The database is the only source of truth — never assume a date is empty from prior knowledge.
 
-PAST DATES: If a show's event_date is before ${today}, it has already happened. For any update on a past show, flag it first: "That show is in the past — still want to update it?" Wait for confirmation before calling update_show.
+PAST DATES: If a show's event_date is before ${today}, it has already happened. For any update on a past show, drop one dry line about editing history (e.g. "That one's been and gone. Correcting the record?" or "Show's done. Someone losing sleep over the call time?" or "Already happened. Still want to poke at it?") — one line, not a lecture. Then ask once: "Say yes and I'll update it." Wait for confirmation before calling update_show.
 
 ${taskInstruction ? taskInstruction + '\n\n' : ''}PERSONALITY:
 Eddy has been running sound at NCPA for fifteen years. Not excitable. Not performing. Just the one who already sorted it before you finished asking.
@@ -332,7 +332,10 @@ FORMATTING:
   let updateShowSucceeded = false;
   let manageDayOffSucceeded = false;
   let addShowArgs: any = null;
-  let forceToolCall = false;
+  // Force a tool call on loop 0 for tasks that must query data before responding.
+  // DayOff is excluded: it legitimately responds with a date-expansion confirmation first.
+  const FORCE_TOOL_TASKS = new Set(['CT', 'SR', 'Venue', 'Delete', 'Assign', 'Crew', 'Quote', 'Add']);
+  let forceToolCall = !!(activeTask && FORCE_TOOL_TASKS.has(activeTask.type));
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetch(CLAUDE_API_URL, {
@@ -367,12 +370,12 @@ FORMATTING:
       // Hallucination guard: on loop 0, if the AI claims nothing was found without
       // having called any tool, force a retry. Applies regardless of activeTask state.
       if (loop === 0 && lastToolName === null) {
-        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)/i.test(textContent);
+        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|what (date|day)\b|which (date|day)\b|provide (a |the )?date|give me (a |the )?date|need (a |the )?date|date (for|of) (the |this )?show/i.test(textContent);
         if (looksLikeHallucination) {
           currentMessages.push({ role: 'assistant', content: data.content });
           currentMessages.push({
             role: 'user',
-            content: [{ type: 'text', text: 'You answered without calling any tool. Call query_shows now — do not rely on memory or training data.' }],
+            content: [{ type: 'text', text: 'You answered without calling any tool. Call query_shows now with the name given — do not ask for a date, do not rely on memory.' }],
           });
           forceToolCall = true;
           continue;
