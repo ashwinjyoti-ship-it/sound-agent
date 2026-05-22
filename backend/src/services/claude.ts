@@ -501,16 +501,23 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
   try {
     switch (name) {
       case 'query_shows': {
-        const programOnly = !args.from && !!args.program;
+        const past6m = new Date(today); past6m.setMonth(past6m.getMonth() - 6);
+        const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-        if (!args.from) {
-          // Name-only search: 6 months back + 1 year forward
-          const past6m = new Date(today); past6m.setMonth(past6m.getMonth() - 6);
-          const fmt = (d: Date) => d.toISOString().slice(0, 10);
-          args.from = args.program ? fmt(past6m) : today;
+        // When a program name is given, always use the full name-search window.
+        // The AI defaults to passing from=today even for name-only queries, which
+        // collapses the search to a single day and misses the show.
+        if (args.program) {
+          args.from = fmt(past6m);
+          args.to = oneYearOut;
+        } else if (!args.from) {
+          args.from = today;
           if (!args.to) args.to = oneYearOut;
         }
 
+        // programOnly controls whether the ±7-day fallback fires — skip it when
+        // we already searched the full window.
+        const programOnly = !!args.program;
         const to = args.to || args.from;
 
         // Promote misclassified venue abbreviation in program field
