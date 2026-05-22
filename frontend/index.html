@@ -124,6 +124,8 @@
     .input-bar{position:fixed;bottom:0;left:0;right:0;z-index:100;background:var(--surface);backdrop-filter:blur(18px);border-top:1px solid var(--border);padding:6px 14px calc(6px + var(--safe-bottom));display:flex;gap:8px;align-items:center;box-sizing:border-box}
     /* PWA standalone — dark bookend toolbar matching the header */
     @media(display-mode:standalone){
+      /* Fill safe-area gap below the input bar with matching dark color */
+      body::after{content:'';position:fixed;z-index:99;bottom:0;left:0;right:0;height:env(safe-area-inset-bottom,34px);background:#1A1916}
       .input-bar{
         background:#1A1916;
         background-image:repeating-linear-gradient(90deg, transparent 0px, transparent 6px, rgba(224,123,32,0.28) 6px, rgba(224,123,32,0.28) 7px);
