@@ -332,6 +332,7 @@ FORMATTING:
   let updateShowSucceeded = false;
   let manageDayOffSucceeded = false;
   let addShowArgs: any = null;
+  let forceToolCall = false;
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetch(CLAUDE_API_URL, {
@@ -347,9 +348,10 @@ FORMATTING:
         system: systemPrompt,
         messages: currentMessages,
         tools: TOOLS,
-        tool_choice: { type: 'auto' },
+        tool_choice: forceToolCall ? { type: 'any' } : { type: 'auto' },
       }),
     });
+    forceToolCall = false;
 
     if (!response.ok) {
       const text = await response.text();
@@ -372,6 +374,7 @@ FORMATTING:
             role: 'user',
             content: [{ type: 'text', text: 'You answered without calling any tool. Call query_shows now — do not rely on memory or training data.' }],
           });
+          forceToolCall = true;
           continue;
         }
       }
