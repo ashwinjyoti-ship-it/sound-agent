@@ -365,7 +365,7 @@ FORMATTING:
       // Hallucination guard: on loop 0, if the AI claims nothing was found without
       // having called any tool, force a retry. Applies regardless of activeTask state.
       if (loop === 0 && lastToolName === null) {
-        const looksLikeHallucination = /nothing (in|on|found)|not in the (system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|not (listed|showing)/i.test(textContent);
+        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)/i.test(textContent);
         if (looksLikeHallucination) {
           currentMessages.push({ role: 'assistant', content: data.content });
           currentMessages.push({
