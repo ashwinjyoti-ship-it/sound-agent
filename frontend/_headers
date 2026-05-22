@@ -3,3 +3,6 @@
 
 /sw.js
   Cache-Control: no-cache, must-revalidate
+
+/js/*.js
+  Cache-Control: no-cache, must-revalidate
