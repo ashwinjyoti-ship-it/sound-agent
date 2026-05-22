@@ -504,12 +504,17 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
         const past6m = new Date(today); past6m.setMonth(past6m.getMonth() - 6);
         const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-        // When a program name is given, always use the full name-search window.
-        // The AI defaults to passing from=today even for name-only queries, which
-        // collapses the search to a single day and misses the show.
         if (args.program) {
-          args.from = fmt(past6m);
-          args.to = oneYearOut;
+          if (!args.from) {
+            // No date given at all: search full window (6 months back so past shows are findable)
+            args.from = fmt(past6m);
+            args.to = oneYearOut;
+          } else if (!args.to || args.to === args.from) {
+            // AI anchored to a date but gave no end (or same-day range, i.e. a default) —
+            // extend forward so the show is found even if it's not on that exact date.
+            args.to = oneYearOut;
+          }
+          // If both from and to differ, the AI was given an explicit range — respect it.
         } else if (!args.from) {
           args.from = today;
           if (!args.to) args.to = oneYearOut;
