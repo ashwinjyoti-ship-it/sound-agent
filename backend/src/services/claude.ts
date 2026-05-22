@@ -498,12 +498,11 @@ async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, tod
         const programOnly = !args.from && !!args.program;
 
         if (!args.from) {
-          // Name-only search: scan 1 year back + 2 years forward so nothing is missed
-          const past1y = new Date(today); past1y.setFullYear(past1y.getFullYear() - 1);
-          const future2y = new Date(today); future2y.setFullYear(future2y.getFullYear() + 2);
+          // Name-only search: 6 months back + 1 year forward
+          const past6m = new Date(today); past6m.setMonth(past6m.getMonth() - 6);
           const fmt = (d: Date) => d.toISOString().slice(0, 10);
-          args.from = args.program ? fmt(past1y) : today;
-          if (!args.to) args.to = args.program ? fmt(future2y) : oneYearOut;
+          args.from = args.program ? fmt(past6m) : today;
+          if (!args.to) args.to = oneYearOut;
         }
 
         const to = args.to || args.from;
