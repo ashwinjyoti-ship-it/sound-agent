@@ -305,7 +305,7 @@ function addMsg(role, text) {
   var avatarHtml = role === 'user'
     ? '<div class="msg-avatar-user">You</div>'
     : '<div class="msg-avatar-sa">' + mascotSVG('mascot-idle') + '</div>';
-  div.innerHTML = avatarHtml + '<div class="msg-body">' + escapeHtml(cleanText) + '</div>';
+  div.innerHTML = avatarHtml + '<div class="msg-body"><div class="msg-body-inner">' + escapeHtml(cleanText) + '</div></div>';
   chatEl.appendChild(div);
   scrollToBottom();
   return div;
@@ -331,7 +331,7 @@ function addLoading() {
   div.id = id;
   div.className = 'msg msg-assistant';
   div.innerHTML = '<div class="msg-avatar-sa">' + mascotSVG('mascot-think') + '</div>' +
-    '<div class="msg-body"><div class="loading"><div class="spinner"></div>On it…</div></div>';
+    '<div class="msg-body"><div class="msg-body-inner"><div class="loading"><div class="spinner"></div>On it…</div></div></div>';
   chatEl.appendChild(div);
   scrollToBottom();
   return id;
@@ -363,7 +363,7 @@ function renderStructured(data) {
   const div = document.createElement('div');
   div.className = 'msg msg-assistant';
 
-  let html = '<div class="msg-avatar-sa">' + mascotSVG('mascot-idle') + '</div><div class="msg-body">';
+  let html = '<div class="msg-avatar-sa">' + mascotSVG('mascot-idle') + '</div><div class="msg-body"><div class="msg-body-inner">';
 
   if (data.type === 'crew_availability') {
     html += renderCrewPicker(data);
@@ -377,7 +377,7 @@ function renderStructured(data) {
     html += escapeHtml(JSON.stringify(data, null, 2));
   }
 
-  html += '</div>';
+  html += '</div></div>';
   div.innerHTML = html;
   chatEl.appendChild(div);
   scrollToBottom();
