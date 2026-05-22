@@ -64,11 +64,15 @@
     @keyframes fadeIn{from{opacity:0;transform:translateY(6px)}to{opacity:1;transform:translateY(0)}}
     .msg-avatar-user{width:32px;height:32px;border-radius:50%;flex-shrink:0;display:flex;align-items:center;justify-content:center;font-size:12px;font-weight:700;background:var(--primary-light);color:#fff;align-self:flex-start;margin-top:4px}
     .msg-avatar-sa{width:90px;flex-shrink:0;display:flex;align-items:flex-start;justify-content:center;overflow:visible;align-self:flex-start;padding-top:4px}
-    .msg-body{position:relative;flex:1;background:var(--surface);backdrop-filter:blur(18px);border:1px solid var(--border);border-radius:var(--radius-sm);padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:var(--shadow);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word;max-width:100%}
+    .msg-body{position:relative;flex:0 1 auto;max-width:75%;background:var(--surface);backdrop-filter:blur(18px);border:1px solid rgba(212,122,49,0.45);border-radius:20px;padding:12px 14px;font-size:15px;line-height:1.6;box-shadow:var(--shadow);white-space:pre-wrap;word-break:break-word;overflow-wrap:break-word}
+    .msg-user{flex-direction:row-reverse}
     .msg-user .msg-body{background:rgba(212,122,49,.07)}
-    /* Speech bubble tail pointing left toward Eddy */
-    .msg-sa .msg-body::before{content:'';position:absolute;left:-10px;top:14px;width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-right:10px solid rgba(212,122,49,0.35)}
-    .msg-sa .msg-body::after{content:'';position:absolute;left:-8px;top:15px;width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-right:9px solid var(--surface)}
+    /* Agent bubble tail — points left toward mascot */
+    .msg-assistant .msg-body::before{content:'';position:absolute;left:-10px;top:14px;width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-right:10px solid rgba(212,122,49,0.45)}
+    .msg-assistant .msg-body::after{content:'';position:absolute;left:-8px;top:15px;width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-right:9px solid var(--surface)}
+    /* User bubble tail — points right toward user avatar */
+    .msg-user .msg-body::before{content:'';position:absolute;right:-10px;top:14px;width:0;height:0;border-top:9px solid transparent;border-bottom:9px solid transparent;border-left:10px solid rgba(212,122,49,0.45)}
+    .msg-user .msg-body::after{content:'';position:absolute;right:-8px;top:15px;width:0;height:0;border-top:8px solid transparent;border-bottom:8px solid transparent;border-left:9px solid rgba(212,122,49,.07)}
 
     /* Mascot animations */
     @keyframes idle-bob{0%,100%{transform:translateY(0px) rotate(0deg) scale(1)}25%{transform:translateY(-3px) rotate(-1.5deg) scale(1.01)}50%{transform:translateY(-7px) rotate(0deg) scale(1.03)}75%{transform:translateY(-3px) rotate(1.5deg) scale(1.01)}}
