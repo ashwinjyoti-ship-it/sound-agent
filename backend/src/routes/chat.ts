@@ -1,6 +1,7 @@
 import express from 'express';
-import { CLAUDE_API_KEY, ORCHESTRATOR_TOKEN } from '../config';
+import { CLAUDE_API_KEY, GEMINI_API_KEY, ORCHESTRATOR_TOKEN } from '../config';
 import { chatWithClaude } from '../services/claude';
+import { chatWithGemini } from '../services/gemini';
 import { OrchestratorClient } from '../services/orchestrator';
 
 const router = express.Router();
@@ -18,7 +19,19 @@ router.post('/', async (req, res) => {
     }
 
     const orchestrator = new OrchestratorClient(ORCHESTRATOR_TOKEN);
-    const result = await chatWithClaude(messages, orchestrator, activeTask);
+
+    let result: { reply: string; taskDone: boolean };
+    try {
+      result = await chatWithClaude(messages, orchestrator, activeTask);
+    } catch (primaryErr: any) {
+      const isTransient = /Claude API (5\d\d|unreachable)|fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(primaryErr.message || '');
+      if (isTransient && GEMINI_API_KEY) {
+        console.warn('Claude unavailable, falling back to Gemini:', primaryErr.message);
+        result = await chatWithGemini(messages, orchestrator, activeTask);
+      } else {
+        throw primaryErr;
+      }
+    }
 
     res.json({ reply: result.reply, taskDone: result.taskDone });
   } catch (err: any) {
