@@ -277,7 +277,7 @@ async function sendMessage() {
 
     const structured = tryParseStructured(reply);
     if (structured) {
-      renderStructured(structured);
+      renderStructured(structured, text);
     } else {
       addMsg('assistant', reply);
     }
@@ -359,7 +359,7 @@ function tryParseStructured(text) {
   }
 }
 
-function renderStructured(data) {
+function renderStructured(data, userText) {
   const div = document.createElement('div');
   div.className = 'msg msg-assistant';
 
@@ -370,7 +370,8 @@ function renderStructured(data) {
   } else if (data.type === 'quote') {
     html += renderQuote(data);
   } else if (data.type === 'shows') {
-    html += renderShowList(data);
+    var deleteIntent = /\b(delete|remove|cancel|delet)\b/i.test(userText || '');
+    html += renderShowList(data, deleteIntent);
   } else if (data.type === 'success') {
     html += '✅ ' + escapeHtml(data.message || 'Done');
   } else {
@@ -385,7 +386,7 @@ function renderStructured(data) {
   if (data.type === 'crew_availability') {
     attachCrewListeners(data, div);
   }
-  if (data.type === 'shows') {
+  if (data.type === 'shows' && deleteIntent) {
     attachShowDeleteListeners(div);
   }
 }
@@ -707,7 +708,7 @@ function copyQuoteRichText(btn, copyId) {
   }
 }
 
-function renderShowList(data) {
+function renderShowList(data, showDelete) {
   var shows = data.shows || [];
   if (!shows.length) return '<div class="card-in-msg">No shows found.</div>';
 
@@ -741,7 +742,7 @@ function renderShowList(data) {
     if (s.sound_requirements) {
       h += '<div style="font-size:12px;color:var(--muted);margin-top:4px">Sound: ' + escapeHtml(s.sound_requirements) + '</div>';
     }
-    if (s.id) {
+    if (s.id && showDelete) {
       h += '<button class="del-show-btn" data-show-id="' + s.id + '" style="margin-top:10px;padding:6px 14px;font-size:12px;font-weight:600;color:#fff;background:#c0392b;border:none;border-radius:8px;cursor:pointer;letter-spacing:0.2px">&#128465; Delete Show</button>';
     }
     h += '</div>';
