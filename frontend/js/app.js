@@ -255,8 +255,12 @@ async function sendMessage() {
     removeLoading(loadingId);
 
     if (!res.ok) {
-      const err = await res.text();
-      addMsg('assistant', 'Something went wrong on the server — ' + (err || 'unknown error') + '. Try again in a sec.');
+      let friendlyMsg = 'Something went wrong on the server. Try again in a sec.';
+      try {
+        const errData = await res.json();
+        if (errData.reply) friendlyMsg = errData.reply;
+      } catch (_) {}
+      addMsg('assistant', friendlyMsg);
       return;
     }
 

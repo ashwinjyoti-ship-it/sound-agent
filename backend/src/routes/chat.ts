@@ -23,7 +23,12 @@ router.post('/', async (req, res) => {
     res.json({ reply: result.reply, taskDone: result.taskDone });
   } catch (err: any) {
     console.error('Chat error:', err);
-    res.status(500).json({ error: err.message || 'Chat failed' });
+    const msg = (err.message || '');
+    const isAiDown = /Claude API (5\d\d|unreachable)|fetch failed|ECONNREFUSED|ENOTFOUND|network/i.test(msg);
+    const reply = isAiDown
+      ? "AI's having a moment — Anthropic servers seem to be down. Try again in a bit."
+      : 'Something went wrong on my end. Try again.';
+    res.status(500).json({ error: msg, reply });
   }
 });
 

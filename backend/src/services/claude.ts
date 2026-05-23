@@ -4,6 +4,21 @@ import { OrchestratorClient } from './orchestrator';
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
+async function fetchWithRetry(url: string, init: RequestInit, maxAttempts = 4): Promise<Response> {
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
+    try {
+      const res = await fetch(url, init);
+      if (res.status < 500) return res; // 2xx/4xx — don't retry
+      lastErr = new Error(`Claude API ${res.status}: ${await res.text()}`);
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  throw lastErr ?? new Error('Claude API unreachable after retries');
+}
+
 const TOOLS = [
   {
     name: 'query_shows',
@@ -345,7 +360,7 @@ FORMATTING:
   let forceToolCall = !!(activeTask && FORCE_TOOL_TASKS.has(activeTask.type));
 
   for (let loop = 0; loop < maxLoops; loop++) {
-    const response = await fetch(CLAUDE_API_URL, {
+    const response = await fetchWithRetry(CLAUDE_API_URL, {
       method: 'POST',
       headers: {
         'x-api-key': CLAUDE_API_KEY,
@@ -377,7 +392,7 @@ FORMATTING:
       // Hallucination guard: on loop 0, if the AI claims nothing was found without
       // having called any tool, force a retry. Applies regardless of activeTask state.
       if (loop === 0 && lastToolName === null) {
-        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|what (date|day)\b|which (date|day)\b|provide (a |the )?date|give me (a |the )?date|need (a |the )?date|date (for|of) (the |this )?show/i.test(textContent);
+        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|what (date|day)\b|which (date|day)\b|provide (a |the )?date|give me (a |the )?date|need (a |the )?date|date (for|of) (the |this )?show|\bno idea\b|not (something|anything) in my|not in my (world|domain|area|scope)|outside (my|the) (world|domain|area|scope)|not familiar with|don't know what .{1,30} is\b|have no (information|record|data) (on|about)\b/i.test(textContent);
         if (looksLikeHallucination) {
           currentMessages.push({ role: 'assistant', content: data.content });
           currentMessages.push({
