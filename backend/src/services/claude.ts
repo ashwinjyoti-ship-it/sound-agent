@@ -4,7 +4,22 @@ import { OrchestratorClient } from './orchestrator';
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
 const CLAUDE_MODEL = 'claude-sonnet-4-6';
 
-const TOOLS = [
+async function fetchWithRetry(url: string, init: RequestInit, maxAttempts = 4): Promise<Response> {
+  let lastErr: Error | null = null;
+  for (let attempt = 0; attempt < maxAttempts; attempt++) {
+    if (attempt > 0) await new Promise(r => setTimeout(r, 2000 * Math.pow(2, attempt - 1)));
+    try {
+      const res = await fetch(url, init);
+      if (res.status < 500) return res; // 2xx/4xx — don't retry
+      lastErr = new Error(`Claude API ${res.status}: ${await res.text()}`);
+    } catch (err: any) {
+      lastErr = err;
+    }
+  }
+  throw lastErr ?? new Error('Claude API unreachable after retries');
+}
+
+export const TOOLS = [
   {
     name: 'query_shows',
     description: 'Query shows/events from the NCPA schedule database. Pass from/to dates if known; omit both to search upcoming shows by program name only.',
@@ -105,7 +120,7 @@ const TOOLS = [
   },
 ];
 
-function extractText(content: any): string {
+export function extractText(content: any): string {
   if (typeof content === 'string') return content;
   if (Array.isArray(content)) {
     return content.filter((b: any) => b.type === 'text').map((b: any) => b.text).join('');
@@ -117,7 +132,7 @@ function extractText(content: any): string {
 // Handles two formats:
 //   "Assign crew for show #42 on YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"  (with show ID)
 //   "Assign crew for YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"              (date-only fallback)
-async function handleAssignCrewMessage(
+export async function handleAssignCrewMessage(
   userContent: string,
   orchestrator: OrchestratorClient,
 ): Promise<{ reply: string; taskDone: boolean } | null> {
@@ -175,7 +190,7 @@ async function handleAssignCrewMessage(
   return null;
 }
 
-async function handleDeleteShowMessage(
+export async function handleDeleteShowMessage(
   userContent: string,
   orchestrator: OrchestratorClient,
 ): Promise<{ reply: string; taskDone: boolean } | null> {
@@ -197,17 +212,8 @@ async function handleDeleteShowMessage(
   return { reply, taskDone: true };
 }
 
-export async function chatWithClaude(
-  messages: any[],
-  orchestrator: OrchestratorClient,
-  activeTask?: { type: string; prefix: string } | null,
-): Promise<{ reply: string; taskDone: boolean }> {
-  const nowIST = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
-  const today = nowIST.toISOString().slice(0, 10);
-  const oneYearOut = new Date(nowIST.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
-  const currentYear = nowIST.getUTCFullYear();
-
-  const TASK_INSTRUCTIONS: Record<string, string> = {
+export function buildTaskInstructions(today: string): Record<string, string> {
+  return {
     CT: 'ACTIVE TASK — Update call time. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
     SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
     Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
@@ -227,28 +233,10 @@ export async function chatWithClaude(
 4. action=list → call immediately, no confirmation.
 5. If user corrects the dates instead of confirming → update the list, re-show, ask again. Do NOT call the tool on a correction.`,
   };
+}
 
-  // Short-circuit structured crew-assignment messages from the picker button
-  const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
-  const rawLastContent = typeof lastUserMsg?.content === 'string'
-    ? lastUserMsg.content
-    : extractText(lastUserMsg?.content);
-  const assignResult = await handleAssignCrewMessage(rawLastContent, orchestrator);
-  if (assignResult !== null) return assignResult;
-
-  const deleteResult = await handleDeleteShowMessage(rawLastContent, orchestrator);
-  if (deleteResult !== null) return deleteResult;
-
-  // Strip task prefix so Claude sees "yes" not "SR: yes" — prevents re-interpreting
-  // a confirmation as a new task request (e.g. "SR: yes" → "yes").
-  const prefixToStrip = activeTask?.prefix || '';
-  const lastUserContent = prefixToStrip && rawLastContent.startsWith(prefixToStrip)
-    ? rawLastContent.slice(prefixToStrip.length).trimStart()
-    : rawLastContent;
-
-  const taskInstruction = activeTask ? (TASK_INSTRUCTIONS[activeTask.type] || '') : '';
-
-  const systemPrompt = `You are Eddy — the NCPA Sound Department's operations assistant. Not the chief engineer. The one who already sorted it before you finished asking.
+export function buildSystemPrompt(today: string, currentYear: number, taskInstruction: string): string {
+  return `You are Eddy — the NCPA Sound Department's operations assistant. Not the chief engineer. The one who already sorted it before you finished asking.
 
 TODAY'S DATE: ${today} (year ${currentYear}, current month ${today.slice(0, 7)}). Date inference — apply in order:
 1. Day only ("on 31", "what's on 23", "the 5th") → use current month. Construct the full date as ${today.slice(0, 7)}-{day}. Example: user says "31" → call query_shows with from=${today.slice(0, 7)}-31.
@@ -326,6 +314,32 @@ FORMATTING:
 - No markdown (**, __, ##, bullet dashes, etc.)
 - Plain text only; line breaks are fine
 - Concise always`;
+}
+
+export async function chatWithClaude(
+  messages: any[],
+  orchestrator: OrchestratorClient,
+  activeTask?: { type: string; prefix: string } | null,
+): Promise<{ reply: string; taskDone: boolean }> {
+  const nowIST = new Date(Date.now() + (5 * 60 + 30) * 60 * 1000);
+  const today = nowIST.toISOString().slice(0, 10);
+  const oneYearOut = new Date(nowIST.getTime() + 365 * 24 * 60 * 60 * 1000).toISOString().slice(0, 10);
+  const currentYear = nowIST.getUTCFullYear();
+
+  const lastUserMsg = [...messages].reverse().find((m: any) => m.role === 'user');
+  const rawLastContent = typeof lastUserMsg?.content === 'string'
+    ? lastUserMsg.content
+    : extractText(lastUserMsg?.content);
+  const assignResult = await handleAssignCrewMessage(rawLastContent, orchestrator);
+  if (assignResult !== null) return assignResult;
+
+  const deleteResult = await handleDeleteShowMessage(rawLastContent, orchestrator);
+  if (deleteResult !== null) return deleteResult;
+
+  const prefixToStrip = activeTask?.prefix || '';
+  const taskInstructions = buildTaskInstructions(today);
+  const taskInstruction = activeTask ? (taskInstructions[activeTask.type] || '') : '';
+  const systemPrompt = buildSystemPrompt(today, currentYear, taskInstruction);
 
   let currentMessages = messages.map((m: any) => {
     if (prefixToStrip && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith(prefixToStrip)) {
@@ -345,7 +359,7 @@ FORMATTING:
   let forceToolCall = !!(activeTask && FORCE_TOOL_TASKS.has(activeTask.type));
 
   for (let loop = 0; loop < maxLoops; loop++) {
-    const response = await fetch(CLAUDE_API_URL, {
+    const response = await fetchWithRetry(CLAUDE_API_URL, {
       method: 'POST',
       headers: {
         'x-api-key': CLAUDE_API_KEY,
@@ -377,7 +391,7 @@ FORMATTING:
       // Hallucination guard: on loop 0, if the AI claims nothing was found without
       // having called any tool, force a retry. Applies regardless of activeTask state.
       if (loop === 0 && lastToolName === null) {
-        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|what (date|day)\b|which (date|day)\b|provide (a |the )?date|give me (a |the )?date|need (a |the )?date|date (for|of) (the |this )?show/i.test(textContent);
+        const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|what (date|day)\b|which (date|day)\b|provide (a |the )?date|give me (a |the )?date|need (a |the )?date|date (for|of) (the |this )?show|\bno idea\b|not (something|anything) in my|not in my (world|domain|area|scope)|outside (my|the) (world|domain|area|scope)|not familiar with|don't know what .{1,30} is\b|have no (information|record|data) (on|about)\b/i.test(textContent);
         if (looksLikeHallucination) {
           currentMessages.push({ role: 'assistant', content: data.content });
           currentMessages.push({
@@ -473,7 +487,7 @@ FORMATTING:
   return { reply: 'Hit the tool-call limit on that one — try breaking it into smaller questions.', taskDone: false };
 }
 
-async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, today: string, oneYearOut: string): Promise<any> {
+export async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, today: string, oneYearOut: string): Promise<any> {
   const name = toolBlock.name;
   const args = toolBlock.input || {};
 
