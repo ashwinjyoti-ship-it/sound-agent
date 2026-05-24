@@ -218,7 +218,7 @@ export function buildTaskInstructions(today: string): Record<string, string> {
     SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
     Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
     Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
-    Add: 'ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving, call get_crew_availability for that date.',
+    Add: `ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving: if the show date is in the current month (${today.slice(0, 7)}), call get_crew_availability for that date. If the show is in any other month, stop — do not call get_crew_availability.`,
     Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
     Delete: 'ACTIVE TASK — Delete a show. Call query_shows to find it by whatever the user gave (name, date, or both). Surface the show card — it has a Delete button the user presses to confirm. If the show is in the past, flag it first: "That one\'s already happened — still want to delete it?" Wait for yes before surfacing. Do NOT call any delete endpoint yourself.',
     Crew: `ACTIVE TASK — Show crew availability. If a date is in the message, use it. If no date given, call get_crew_availability for today (${today}). After the picker, if no date was specified, add one line: "Or a different date?"`,
@@ -438,10 +438,16 @@ export async function chatWithClaude(
       }
 
       // Force crew picker card (rendering requirement)
-      if (lastToolName === 'get_crew_availability' && lastToolResult?.success) {
+      // Suppress crew picker when the show was just added for a non-current month —
+      // day-offs and assignments aren't meaningful that far out.
+      const crewDate = lastToolResult?.date || '';
+      const showInCurrentMonth = addShowArgs
+        ? (addShowArgs.event_date || '').slice(0, 7) === today.slice(0, 7)
+        : true;
+      if (lastToolName === 'get_crew_availability' && lastToolResult?.success && (showInCurrentMonth || !addShowArgs)) {
         const crewJson = `\`\`\`json\n${JSON.stringify({
           type: 'crew_availability',
-          date: lastToolResult.date,
+          date: crewDate,
           available: lastToolResult.available,
           assigned: lastToolResult.assigned,
           unavailable: lastToolResult.unavailable,
