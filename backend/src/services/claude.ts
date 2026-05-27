@@ -392,11 +392,16 @@ export async function chatWithClaude(
       // having called any tool, force a retry. Applies regardless of activeTask state.
       if (loop === 0 && lastToolName === null) {
         const looksLikeHallucination = /\bnothing\b|not in (the )?(system|schedule|database)|can't find|couldn't find|no (shows?|results?|records?)|what (date|day)\b|which (date|day)\b|provide (a |the )?date|give me (a |the )?date|need (a |the )?date|date (for|of) (the |this )?show|\bno idea\b|not (something|anything) in my|not in my (world|domain|area|scope)|outside (my|the) (world|domain|area|scope)|not familiar with|don't know what .{1,30} is\b|have no (information|record|data) (on|about)\b/i.test(textContent);
-        if (looksLikeHallucination) {
+        // Guard against fabricated positive results: a shows card without a query_shows call
+        // means the AI invented show data from memory (wrong dates, stale info).
+        const hallucinatedShowCard = /```json[\s\S]{0,500}"type"\s*:\s*"shows"/i.test(textContent);
+        if (looksLikeHallucination || hallucinatedShowCard) {
           currentMessages.push({ role: 'assistant', content: data.content });
           currentMessages.push({
             role: 'user',
-            content: [{ type: 'text', text: 'You answered without calling any tool. Call query_shows now with the name given — do not ask for a date, do not rely on memory.' }],
+            content: [{ type: 'text', text: hallucinatedShowCard
+              ? 'You emitted a shows card without calling query_shows. Call query_shows now — do not generate show data from memory.'
+              : 'You answered without calling any tool. Call query_shows now with the name given — do not ask for a date, do not rely on memory.' }],
           });
           forceToolCall = true;
           continue;
