@@ -426,10 +426,10 @@ export async function chatWithClaude(
       // Force quote card (rendering requirement — frontend needs the JSON shape)
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
         const normalizedItems = (lastToolResult.items || []).map((it: any) => ({
-          requested: it.item_name || it.name || it.description || it.requested || '',
-          requestedQty: it.quantity ?? it.qty ?? it.requestedQty ?? it.count ?? 1,
-          rate: it.rate ?? it.unit_price ?? it.price ?? it.unit_rate ?? 0,
-          lineTotal: it.amount ?? it.line_total ?? it.lineTotal ?? it.total ?? (it.rate ?? it.unit_price ?? 0) * (it.quantity ?? it.qty ?? 1),
+          requested: it.name || it.item_name || it.description || it.requested || '',
+          requestedQty: it.quantity ?? it.qty ?? it.requestedQty ?? 1,
+          rate: it.rate ?? it.unit_price ?? it.price ?? 0,
+          lineTotal: it.lineTotal ?? it.amount ?? it.line_total ?? (it.rate ?? 0) * (it.quantity ?? 1),
         }));
         const quoteJson = `\`\`\`json\n${JSON.stringify({
           type: 'quote',
@@ -767,9 +767,12 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
       unmatched.push(item);
       continue;
     }
+    const unitRate = bestMatch.rate ?? bestMatch.price ?? bestMatch.unit_price ?? bestMatch.daily_rate ?? bestMatch.hire_rate ?? 0;
     quoteItems.push({
       name: bestMatch.name,
       quantity: qty,
+      rate: unitRate,
+      lineTotal: unitRate * qty,
     });
   }
 
@@ -798,19 +801,23 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
   }
 
   const data = quoteData.data;
-  // Merge: orchestrator may not echo back name/quantity — inject from our local data
-  const mergedItems = (data.items || []).map((orchItem: any, idx: number) => ({
-    ...orchItem,
-    name: quoteItems[idx]?.name || orchItem.name || orchItem.item_name || '',
-    quantity: quoteItems[idx]?.quantity ?? orchItem.quantity ?? orchItem.qty ?? 1,
-  }));
+  // Build display items from local data (name/qty/rate are reliable).
+  // Orchestrator echoes may omit these fields — don't rely on them.
+  // Fall back to orchestrator items for rate if local rate is 0 (field name unknown).
+  const orchItems: any[] = data.items || [];
+  const displayItems = quoteItems.map((qi, idx) => {
+    const orch = orchItems[idx] || {};
+    const rate = qi.rate || orch.rate ?? orch.unit_price ?? orch.price ?? 0;
+    const lineTotal = qi.lineTotal || orch.amount ?? orch.line_total ?? orch.lineTotal ?? rate * qi.quantity;
+    return { name: qi.name, quantity: qi.quantity, rate, lineTotal };
+  });
   return {
     success: true,
     quote_number: data.quote_number,
     date: data.date,
     client_name: data.client_name,
     event_name: data.event_name,
-    items: mergedItems,
+    items: displayItems,
     subtotal: data.subtotal,
     gst: data.gst,
     total: data.total,
