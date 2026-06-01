@@ -798,13 +798,19 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
   }
 
   const data = quoteData.data;
+  // Merge: orchestrator may not echo back name/quantity — inject from our local data
+  const mergedItems = (data.items || []).map((orchItem: any, idx: number) => ({
+    ...orchItem,
+    name: quoteItems[idx]?.name || orchItem.name || orchItem.item_name || '',
+    quantity: quoteItems[idx]?.quantity ?? orchItem.quantity ?? orchItem.qty ?? 1,
+  }));
   return {
     success: true,
     quote_number: data.quote_number,
     date: data.date,
     client_name: data.client_name,
     event_name: data.event_name,
-    items: data.items,
+    items: mergedItems,
     subtotal: data.subtotal,
     gst: data.gst,
     total: data.total,
