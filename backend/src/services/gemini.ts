@@ -181,10 +181,10 @@ export async function chatWithGemini(
 
       if (lastToolName === 'generate_quote' && lastToolResult?.success) {
         const normalizedItems = (lastToolResult.items || []).map((it: any) => ({
-          requested: it.name || it.requested || '',
-          requestedQty: it.quantity ?? it.requestedQty ?? 1,
-          rate: it.rate ?? it.unit_price ?? 0,
-          lineTotal: it.amount ?? it.lineTotal ?? it.total ?? 0,
+          requested: it.item_name || it.name || it.description || it.requested || '',
+          requestedQty: it.quantity ?? it.qty ?? it.requestedQty ?? it.count ?? 1,
+          rate: it.rate ?? it.unit_price ?? it.price ?? it.unit_rate ?? 0,
+          lineTotal: it.amount ?? it.line_total ?? it.lineTotal ?? it.total ?? (it.rate ?? it.unit_price ?? 0) * (it.quantity ?? it.qty ?? 1),
         }));
         const quoteJson = `\`\`\`json\n${JSON.stringify({
           type: 'quote',
