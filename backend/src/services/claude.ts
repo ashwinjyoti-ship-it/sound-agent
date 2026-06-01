@@ -807,8 +807,8 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
   const orchItems: any[] = data.items || [];
   const displayItems = quoteItems.map((qi, idx) => {
     const orch = orchItems[idx] || {};
-    const rate = qi.rate || orch.rate ?? orch.unit_price ?? orch.price ?? 0;
-    const lineTotal = qi.lineTotal || orch.amount ?? orch.line_total ?? orch.lineTotal ?? rate * qi.quantity;
+    const rate = qi.rate || (orch.rate ?? orch.unit_price ?? orch.price ?? 0);
+    const lineTotal = qi.lineTotal || (orch.amount ?? orch.line_total ?? orch.lineTotal ?? rate * qi.quantity);
     return { name: qi.name, quantity: qi.quantity, rate, lineTotal };
   });
   return {
