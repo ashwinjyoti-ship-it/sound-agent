@@ -128,6 +128,10 @@ export function extractText(content: any): string {
   return '';
 }
 
+function stripJsonBlocks(text: string): string {
+  return text.replace(/```json[\s\S]*?```/g, '').trim();
+}
+
 // Deterministic handler for crew-picker "Assign Crew" button messages.
 // Handles two formats:
 //   "Assign crew for show #42 on YYYY-MM-DD: FOH=Name, Stage=Name1, Name2"  (with show ID)
@@ -438,7 +442,7 @@ export async function chatWithClaude(
           gst: lastToolResult.gst,
           total: lastToolResult.total,
         })}\n\`\`\``;
-        const quip = textContent.trim();
+        const quip = stripJsonBlocks(textContent).trim();
         return { reply: quip ? `${quip}\n${quoteJson}` : quoteJson, taskDone: true };
       }
 
@@ -458,13 +462,13 @@ export async function chatWithClaude(
           unavailable: lastToolResult.unavailable,
           conflicts: lastToolResult.conflicts,
         })}\n\`\`\``;
-        const parts = [addShowCard, textContent.trim() || null, crewJson].filter(Boolean);
+        const parts = [addShowCard, stripJsonBlocks(textContent).trim() || null, crewJson].filter(Boolean);
         return { reply: parts.join('\n'), taskDone: true };
       }
 
       const taskDone = updateShowSucceeded || manageDayOffSucceeded
         || (lastToolName === 'query_shows' && activeTask?.type === 'Delete');
-      const baseParts = [addShowCard, textContent || (addShowCard ? null : 'Done.')].filter(Boolean);
+      const baseParts = [addShowCard, stripJsonBlocks(textContent).trim() || (addShowCard ? null : 'Done.')].filter(Boolean);
       return { reply: baseParts.join('\n'), taskDone: taskDone || !!addShowCard };
     }
 

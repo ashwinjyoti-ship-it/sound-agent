@@ -354,10 +354,11 @@ function scrollToBottom() {
 
 // ─── Structured Rendering ───
 function tryParseStructured(text) {
-  const jsonMatch = text.match(/```json\s*([\s\S]*?)```/);
-  if (!jsonMatch) return null;
+  // Use the LAST ```json block — the backend appends the authoritative one at the end.
+  const matches = [...text.matchAll(/```json\s*([\s\S]*?)```/g)];
+  if (!matches.length) return null;
   try {
-    return JSON.parse(jsonMatch[1]);
+    return JSON.parse(matches[matches.length - 1][1]);
   } catch {
     return null;
   }
@@ -582,8 +583,8 @@ function renderQuote(data) {
     var match = item.matches ? item.matches[0] : null;
     var rate = item.rate || 0;
     var lineTotal = item.lineTotal || 0;
-    var itemName = match ? match.name : item.requested;
-    var qty = item.requestedQty || 1;
+    var itemName = (match ? match.name : item.requested) || item.name || '';
+    var qty = item.requestedQty || item.quantity || 1;
     var borderTop = i > 0 ? 'border-top:1px solid var(--border);' : '';
     h += '<div style="' + borderTop + 'padding:10px 0;display:flex;justify-content:space-between;align-items:baseline;gap:8px">';
     h += '<span style="font-size:13px;font-weight:600;flex:1">' + escapeHtml(itemName) + '</span>';
@@ -613,11 +614,11 @@ function renderQuote(data) {
   for (var j = 0; j < data.items.length; j++) {
     var it = data.items[j];
     var m = it.matches ? it.matches[0] : null;
-    var name = m ? m.name : it.requested;
+    var name = (m ? m.name : it.requested) || it.name || '';
     var rowBg = j % 2 === 0 ? '#ffffff' : '#f5f5f5';
     htmlRows += '<tr style="background:' + rowBg + '">' +
       '<td style="padding:6px 10px;border:1px solid #ddd">' + escapeHtml(name) + '</td>' +
-      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center">' + (it.requestedQty || 1) + '</td>' +
+      '<td style="padding:6px 10px;border:1px solid #ddd;text-align:center">' + (it.requestedQty || it.quantity || 1) + '</td>' +
       '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + (it.rate || 0).toLocaleString('en-IN') + '</td>' +
       '<td style="padding:6px 10px;border:1px solid #ddd;text-align:right">₹' + (it.lineTotal || 0).toLocaleString('en-IN') + '</td>' +
       '</tr>';
@@ -644,10 +645,10 @@ function renderQuote(data) {
   for (var k = 0; k < data.items.length; k++) {
     var pit = data.items[k];
     var pm = pit.matches ? pit.matches[0] : null;
-    var pname = pm ? pm.name : pit.requested;
+    var pname = (pm ? pm.name : pit.requested) || pit.name || '';
     plainLines.push(
       padEnd(pname, col1) +
-      padEnd(String(pit.requestedQty || 1), col2) +
+      padEnd(String(pit.requestedQty || pit.quantity || 1), col2) +
       padEnd('₹' + (pit.rate || 0), col3) +
       '₹' + (pit.lineTotal || 0)
     );
