@@ -1,0 +1,99 @@
+@tailwind base;
+@tailwind components;
+@tailwind utilities;
+
+@layer base {
+  :root {
+    --background: 38 30% 94%;
+    --foreground: 0 0% 10%;
+    --card: 38 30% 97%;
+    --card-foreground: 0 0% 10%;
+    --primary: 28 77% 60%;
+    --primary-foreground: 0 0% 100%;
+    --secondary: 0 0% 78%;
+    --secondary-foreground: 0 0% 10%;
+    --muted: 38 20% 88%;
+    --muted-foreground: 0 0% 50%;
+    --border: 38 15% 82%;
+    --input: 38 15% 82%;
+    --ring: 28 77% 60%;
+    --app-height: 100dvh;
+  }
+
+  * { box-sizing: border-box; }
+
+  html, body, #root {
+    height: 100%;
+    margin: 0;
+    padding: 0;
+    overflow: hidden;
+  }
+
+  body {
+    background-color: #F5EDE0;
+    background-image:
+      url("data:image/svg+xml,%3Csvg xmlns='http://www.w3.org/2000/svg' width='12' height='12'%3E%3Cline x1='0' y1='12' x2='12' y2='0' stroke='rgba(100%2C80%2C60%2C0.06)' stroke-width='1'/%3E%3Cline x1='0' y1='0' x2='12' y2='12' stroke='rgba(100%2C80%2C60%2C0.04)' stroke-width='1'/%3E%3C/svg%3E"),
+      radial-gradient(circle at center, rgba(120,90,60,0.035) 0%, transparent 60%),
+      linear-gradient(155deg, #F5EDE0 0%, #FBF3E8 55%, #F0E4D0 100%);
+    background-size: 12px 12px, 60px 60px, 100% 100%;
+    -webkit-font-smoothing: antialiased;
+  }
+
+  #root {
+    display: flex;
+    flex-direction: column;
+    height: var(--app-height);
+    max-width: 100%;
+  }
+}
+
+@layer utilities {
+  .font-lora {
+    font-family: 'Lora', serif;
+  }
+
+  .animate-slide-up {
+    animation: slideUp 0.25s ease-out forwards;
+  }
+
+  .animate-think-swirl {
+    animation: thinkSwirl 3s ease-in-out infinite;
+  }
+
+  /* Speech bubble tails */
+  .bubble-tail-right::after {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    right: -6px;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-left: 8px solid rgba(212, 196, 185, 0.95);
+  }
+
+  .bubble-tail-left::after {
+    content: '';
+    position: absolute;
+    bottom: 8px;
+    left: -6px;
+    width: 0;
+    height: 0;
+    border-top: 6px solid transparent;
+    border-bottom: 6px solid transparent;
+    border-right: 8px solid rgba(226, 232, 240, 0.9);
+  }
+}
+
+@keyframes slideUp {
+  0% { opacity: 0; transform: translateY(8px); }
+  100% { opacity: 1; transform: translateY(0); }
+}
+
+@keyframes thinkSwirl {
+  0%, 100% { transform: rotate(-5deg) translateY(0px); }
+  25%       { transform: rotate(5deg) translateY(-4px); }
+  50%       { transform: rotate(-3deg) translateY(-2px); }
+  75%       { transform: rotate(4deg) translateY(-5px); }
+}

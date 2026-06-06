@@ -1,0 +1,14 @@
+{
+  "name": "Ask Eddy",
+  "short_name": "Ask Eddy",
+  "description": "NCPA Sound Department assistant",
+  "start_url": "/",
+  "display": "standalone",
+  "theme_color": "#E8944A",
+  "background_color": "#F5EDE0",
+  "icons": [
+    { "src": "/icon-192.png", "sizes": "192x192", "type": "image/png" },
+    { "src": "/icon-512.png", "sizes": "512x512", "type": "image/png" },
+    { "src": "/icon.svg", "sizes": "any", "type": "image/svg+xml", "purpose": "maskable" }
+  ]
+}
