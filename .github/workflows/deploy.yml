@@ -13,6 +13,9 @@ jobs:
       deployments: write
     steps:
       - uses: actions/checkout@v4
+      - name: Include chat background asset
+        run: cp "Background Sound agent.png" frontend/
+
       - name: Deploy to Cloudflare Pages
         uses: cloudflare/pages-action@v1
         with:
