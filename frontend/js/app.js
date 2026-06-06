@@ -296,7 +296,7 @@ async function sendMessage() {
 // ─── Mascot ───
 function mascotSVG(cls) {
   const mascotSrc = '/images/mascot.png';
-  const mascotStyle = 'width:84px;height:auto;display:block;filter:none';
+  const mascotStyle = 'width:44px;height:auto;display:block;filter:none';
   return '<img class="' + cls + '" src="' + mascotSrc + '" alt="Sound Agent" style="' + mascotStyle + '">';
 }
 
@@ -307,7 +307,7 @@ function addMsg(role, text) {
   // Clean markdown formatting and escape HTML
   const cleanText = stripMarkdown(text);
   var avatarHtml = role === 'user'
-    ? '<div class="msg-avatar-user">You</div>'
+    ? '<div class="msg-avatar-user">U</div>'
     : '<div class="msg-avatar-sa">' + mascotSVG('mascot-idle') + '</div>';
   div.innerHTML = avatarHtml + '<div class="msg-body"><div class="msg-body-inner">' + escapeHtml(cleanText) + '</div></div>';
   chatEl.appendChild(div);
