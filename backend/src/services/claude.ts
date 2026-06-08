@@ -299,9 +299,9 @@ Call time = when crew reports, not show start time. Never call it "show time".
 If multiple shows found on a date, state each show's actual date when asking which one — never say "today" or "tomorrow".
 
 SHOW DISPLAY:
-- "List", "show", "what's on", or any query returning 2+ shows → always emit the JSON card (one short Eddy quip first, then the card). Never summarise multiple shows as plain text.
-- Single show, one or two specific fields only → plain conversational reply, values from tool result only.
-- Single show, three or more fields, or a general overview → one short quip in Eddy's voice, then the JSON card:
+- Multiple shows returned → write one short Eddy quip and stop. The backend renders the cards automatically — do not emit JSON.
+- Single show, one or two specific fields → plain conversational reply, values from tool result only.
+- Single show, three or more fields or general overview → one short quip, then the JSON card:
 \`\`\`json
 {"type":"shows","shows":[{"id":0,"event_date":"...","program":"...","venue":"...","call_time":"...","foh_crew":"...","stage_crew":"...","sound_requirements":"..."}]}
 \`\`\`
@@ -465,6 +465,27 @@ export async function chatWithClaude(
         })}\n\`\`\``;
         const parts = [addShowCard, stripJsonBlocks(textContent).trim() || null, crewJson].filter(Boolean);
         return { reply: parts.join('\n'), taskDone: true };
+      }
+
+      // Force shows card when query_shows returns 2+ results — AI writes the quip, backend owns the format.
+      // Skip for Delete task (card rendered differently with delete button).
+      if (lastToolName === 'query_shows' && (lastToolResult?.data?.length ?? 0) >= 2 && activeTask?.type !== 'Delete') {
+        const showsJson = `\`\`\`json\n${JSON.stringify({
+          type: 'shows',
+          shows: lastToolResult.data.map((s: any) => ({
+            id: s.id ?? 0,
+            event_date: s.event_date || '',
+            program: s.program || '',
+            venue: s.venue || '',
+            call_time: s.call_time || '',
+            foh_crew: s.foh_crew || '',
+            stage_crew: s.stage_crew || '',
+            sound_requirements: s.sound_requirements || '',
+          })),
+        })}\n\`\`\``;
+        const quip = stripJsonBlocks(textContent).trim();
+        const parts = [addShowCard, quip || null, showsJson].filter(Boolean);
+        return { reply: parts.join('\n'), taskDone: false };
       }
 
       const taskDone = updateShowSucceeded || manageDayOffSucceeded
