@@ -29,7 +29,7 @@ Phone (PWA) → Render Backend (Node/Express)
 
 ## AI Tool-Use Loop (`claude.ts`)
 
-1. Prepend system message → call Claude with 6 tools, max 5 loops
+1. Prepend system message → call Claude with 6 tools, max 6 loops
 2. Tool calls → `executeTool()` → Orchestrator → result back into messages
 3. Final text intercepts:
    - `generate_quote` success → force JSON quote card
