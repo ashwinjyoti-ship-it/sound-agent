@@ -8,7 +8,7 @@ Voice + chat interface for NCPA Sound Department. Built for your phone. Add show
 
 ## Architecture
 ```
-Phone (PWA) → Render API (Kimi K2.6 + Orchestrator proxy) → Your 3 D1 databases
+Phone (PWA) → Render API (Claude primary, Gemini fallback + Orchestrator proxy) → Your 3 D1 databases
 ```
 
 ## What You Can Say
@@ -42,7 +42,9 @@ Go to repo → Settings → Secrets and variables → Actions → New repository
 4. Build: `npm install && npm run build`
 5. Start: `npm start`
 6. **Environment variables:**
-   - `KIMI_API_KEY` = your Kimi K2.6 API key
+   - `CLAUDE_API_KEY` = Anthropic API key for the primary chat model
+   - `GEMINI_API_KEY` = optional Gemini fallback for Claude outages
+   - `OPENAI_API_KEY` = optional Whisper transcription for voice input
    - `ORCHESTRATOR_TOKEN` = `ncpa-orchestrator-2025-secure-token-ashwin`
    - `FRONTEND_URL` = `https://sound-agent.pages.dev`
 7. Deploy
@@ -58,6 +60,22 @@ Auto-deploy happens on every push to `main`.
 | Query schedule | "What's on 17 May JBT?" |
 | Generate quote | "Quote 4 speakers and 6 wireless" |
 
+## Structured cards
+
+The backend owns structured card output for high-risk workflows so the UI can
+render consistent controls:
+
+- Quote and crew-availability tools always produce fenced JSON cards.
+- `add_show` success prepends a show card before the final reply.
+- Claude-backed show queries with two or more results get backend-appended
+  `shows` JSON; Claude supplies only a short quip. The frontend renders the last
+  fenced JSON block it finds.
+- Single-show overviews can still be emitted by the model when the prompt asks
+  for a card with three or more fields.
+
+The Gemini fallback can answer chat/tool flows but does not currently mirror the
+backend-forced multi-show card path.
+
 ## Crew Rules
 - Monthly bulk assignment stays in Crew-Assignment-Automation app
 - This assistant handles **added shows only**
@@ -66,7 +84,8 @@ Auto-deploy happens on every push to `main`.
 - Same logic as Add-show app
 
 ## Notes
-- Voice input uses browser native Web Speech API (free)
+- Voice input records in the browser and uploads to `/api/transcribe`, which uses
+  OpenAI Whisper (`OPENAI_API_KEY`)
 - No auth for v1 (just you + 2IC)
 - iPhone + Android both supported
 - Quotes are copy-paste (no direct Outlook send due to org auth)
