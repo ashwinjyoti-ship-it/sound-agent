@@ -1,6 +1,6 @@
 import express from 'express';
 import { CLAUDE_API_KEY, GEMINI_API_KEY, ORCHESTRATOR_TOKEN } from '../config';
-import { chatWithClaude } from '../services/claude';
+import { chatWithClaude, CLAUDE_CACHE_CONTROL, CLAUDE_MODEL } from '../services/claude';
 import { chatWithGemini } from '../services/gemini';
 import { OrchestratorClient } from '../services/orchestrator';
 
@@ -22,8 +22,9 @@ router.get('/health', async (_req, res) => {
           'Content-Type': 'application/json',
         },
         body: JSON.stringify({
-          model: 'claude-sonnet-4-6',
+          model: CLAUDE_MODEL,
           max_tokens: 10,
+          cache_control: CLAUDE_CACHE_CONTROL,
           messages: [{ role: 'user', content: 'hi' }],
         }),
       });
