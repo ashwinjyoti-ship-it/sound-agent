@@ -17,6 +17,17 @@ let voiceTimeout = null;
 var copyStore = {};
 var activeTask = null; // { type: 'CT'|'SR'|'Assign'|'Add', prefix: 'CT: ' }
 
+function setCEText(el, text) {
+  el.textContent = text;
+  if (text) {
+    try {
+      var r = document.createRange(); var s = window.getSelection();
+      r.selectNodeContents(el); r.collapse(false);
+      s.removeAllRanges(); s.addRange(r);
+    } catch(e) {}
+  }
+}
+
 const STORAGE_KEY = 'eddy_msgs';
 const MAX_MSGS = 40;
 
@@ -141,7 +152,7 @@ function stopRecording() {
       .then(function(res) { return res.ok ? res.json() : Promise.reject(res.status); })
       .then(function(data) {
         if (data.text && data.text.trim()) {
-          textInp.value = data.text.trim();
+          setCEText(textInp, data.text.trim());
           textInp.classList.add('recognized');
           textInp.focus();
           setTimeout(function() { textInp.classList.remove('recognized'); }, 400);
@@ -175,7 +186,7 @@ const SLASH_COMMANDS = [
 const slashMenu = document.getElementById('slash-menu');
 
 function updateSlashMenu() {
-  var val = textInp.value;
+  var val = textInp.innerText || '';
   if (!val.startsWith('/')) { slashMenu.style.display = 'none'; return; }
   var query = val.toLowerCase();
   var matches = SLASH_COMMANDS.filter(function(c) { return c.cmd.startsWith(query); });
@@ -196,11 +207,10 @@ slashMenu.addEventListener('mousedown', function(e) {
   slashMenu.style.display = 'none';
   if (matched && matched.prefix) {
     activeTask = { type: matched.taskType, prefix: matched.prefix };
-    textInp.value = matched.prefix;
-    textInp.placeholder = 'Type or hold mic…';
+    setCEText(textInp, matched.prefix);
     textInp.focus();
   } else {
-    textInp.value = item.dataset.cmd;
+    setCEText(textInp, item.dataset.cmd);
     sendMessage();
   }
 });
@@ -215,7 +225,7 @@ textInp.addEventListener('keydown', function(e) {
 
 async function sendMessage() {
   slashMenu.style.display = 'none';
-  const text = textInp.value.trim();
+  const text = (textInp.innerText || '').trim();
   if (!text) return;
 
   // Handle slash commands
@@ -223,15 +233,13 @@ async function sendMessage() {
   if (matched) {
     if (matched.prefix) {
       activeTask = { type: matched.taskType, prefix: matched.prefix };
-      textInp.value = matched.prefix;
-      textInp.placeholder = 'Type or hold mic…';
+      setCEText(textInp, matched.prefix);
       textInp.focus();
     } else if (matched.cmd === '/clear') {
       chatEl.innerHTML = '';
       clearMessages();
-      textInp.value = '';
+      textInp.textContent = '';
       activeTask = null;
-      textInp.placeholder = 'Type or hold mic…';
       addMsg('assistant', 'Cleared. Clean slate.');
     }
     return;
@@ -240,7 +248,7 @@ async function sendMessage() {
   addMsg('user', text);
   messages.push({ role: 'user', content: text });
   saveMessages();
-  textInp.value = '';
+  textInp.textContent = '';
 
   const loadingId = addLoading();
   sendBtn.disabled = true;
@@ -272,11 +280,9 @@ async function sendMessage() {
 
     if (taskDone || !activeTask) {
       activeTask = null;
-      textInp.placeholder = 'Type or hold mic…';
     } else if (activeTask) {
       // Restore prefix hint so user sees context for their next reply
-      textInp.value = activeTask.prefix;
-      textInp.placeholder = 'Type or hold mic…';
+      setCEText(textInp, activeTask.prefix);
     }
 
     const structured = tryParseStructured(reply);
@@ -544,7 +550,7 @@ function attachCrewListeners(data, container) {
       var msg = showId
         ? 'Assign crew for show #' + showId + ' on ' + date + ': FOH=' + (foh || 'TBD') + ', Stage=' + (stage.join(', ') || 'TBD')
         : 'Assign crew for ' + date + ': FOH=' + (foh || 'TBD') + ', Stage=' + (stage.join(', ') || 'TBD');
-      textInp.value = msg;
+      setCEText(textInp, msg);
       sendMessage();
     });
   }
@@ -561,7 +567,7 @@ function attachShowDeleteListeners(container) {
   container.querySelectorAll('.del-show-btn').forEach(function(btn) {
     btn.addEventListener('click', function() {
       var showId = btn.dataset.showId;
-      textInp.value = 'Confirm delete show #' + showId;
+      setCEText(textInp, 'Confirm delete show #' + showId);
       sendMessage();
     });
   });
