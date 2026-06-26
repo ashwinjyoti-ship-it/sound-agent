@@ -133,6 +133,8 @@
     .text-inp{flex:1;padding:10px 14px;border:1.5px solid var(--border);border-radius:20px;font-size:15px;background:rgba(255,248,238,.70);outline:none;transition:border-color .2s,background-color .2s;color:var(--text)}
     .text-inp:focus{border-color:var(--primary-light);background:#fff}
     .text-inp.recognized{border-color:var(--primary);background:#fff;color:var(--text)}
+    .text-inp[contenteditable]{white-space:pre-wrap;overflow-wrap:break-word;word-break:break-word;cursor:text;line-height:1.4}
+    .text-inp[contenteditable]:empty::before{content:attr(aria-label);color:var(--muted);pointer-events:none;user-select:none}
     .send-btn{width:40px;height:40px;border-radius:50%;border:none;background:var(--primary-dark);color:#fff;font-size:16px;display:flex;align-items:center;justify-content:center;cursor:pointer;flex-shrink:0}
     .send-btn:disabled{opacity:.4;cursor:not-allowed}
 
@@ -172,10 +174,10 @@
   <div class="input-bar">
     <div class="slash-menu" id="slash-menu" style="display:none"></div>
     <button class="mic-btn" id="mic-btn" title="Hold to speak" tabindex="-1">🎤</button>
-    <input type="text" class="text-inp" id="text-inp" placeholder="Type or hold mic…" autocomplete="off" autocorrect="off" autocapitalize="sentences" enterkeyhint="send">
+    <div contenteditable="true" class="text-inp" id="text-inp" role="textbox" aria-label="Type or hold mic…" autocorrect="off" autocapitalize="sentences" enterkeyhint="send"></div>
     <button class="send-btn" id="send-btn" tabindex="-1">➤</button>
   </div>
 
-  <script src="js/app.js?v=65"></script>
+  <script src="js/app.js?v=66"></script>
 </body>
 </html>
