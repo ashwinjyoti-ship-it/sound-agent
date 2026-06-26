@@ -2,7 +2,8 @@ import { CLAUDE_API_KEY } from '../config';
 import { OrchestratorClient } from './orchestrator';
 
 const CLAUDE_API_URL = 'https://api.anthropic.com/v1/messages';
-const CLAUDE_MODEL = 'claude-sonnet-4-6';
+export const CLAUDE_MODEL = 'claude-sonnet-4-6';
+export const CLAUDE_CACHE_CONTROL = { type: 'ephemeral' as const };
 
 async function fetchWithRetry(url: string, init: RequestInit, maxAttempts = 4): Promise<Response> {
   let lastErr: Error | null = null;
@@ -374,6 +375,7 @@ export async function chatWithClaude(
       body: JSON.stringify({
         model: CLAUDE_MODEL,
         max_tokens: 4096,
+        cache_control: CLAUDE_CACHE_CONTROL,
         system: systemPrompt,
         messages: currentMessages,
         tools: TOOLS,
