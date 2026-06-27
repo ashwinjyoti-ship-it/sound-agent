@@ -74,10 +74,15 @@ function syncViewportHeight() {
   var inputBarEl = document.querySelector('.input-bar');
   if (vv) {
     document.documentElement.style.setProperty('--app-height', vv.height + 'px');
-    // Push the fixed input bar above the keyboard
     var keyboardH = window.innerHeight - vv.height - vv.offsetTop;
-    // Only offset for real keyboards (>100px). PWA safe-area artefact is ~34px and must be ignored.
-    if (inputBarEl) inputBarEl.style.bottom = (keyboardH > 100 ? keyboardH : 0) + 'px';
+    var kbOpen = keyboardH > 100;
+    if (inputBarEl) {
+      // iOS 15+ repositions position:fixed;bottom:0 above the keyboard natively.
+      // Setting explicit bottom here double-offsets and creates a gap. Clear it.
+      inputBarEl.style.bottom = '';
+      // Strip the safe-area padding when keyboard is open (home indicator is hidden).
+      inputBarEl.style.paddingBottom = kbOpen ? '6px' : '';
+    }
   } else {
     document.documentElement.style.setProperty('--app-height', window.innerHeight + 'px');
   }
