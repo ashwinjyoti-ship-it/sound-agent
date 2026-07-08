@@ -135,13 +135,31 @@ function normalizeProgramText(s: string): string {
   return s.toLowerCase().replace(/[''`]/g, '').replace(/[–—\-]/g, ' ').replace(/\s+/g, ' ').trim();
 }
 
+/** Strip SR/CT task codes and update verbs from a program search string. */
+export function sanitizeProgramQuery(program?: string): string | undefined {
+  if (!program?.trim()) return undefined;
+  let t = program.trim();
+  let prev = '';
+  while (t !== prev) {
+    prev = t;
+    t = t
+      .replace(/^(sr|ct):\s*/i, '')
+      .replace(/^(sr|ct)\s+/i, '')
+      .replace(/^(update|upadte|udate|upadre|change|set)\s+(sr|ct|sound|call\s*time)\s+/i, '')
+      .replace(/^(update|upadte|udate|upadre|change|set)\s+/i, '')
+      .trim();
+  }
+  t = t.replace(/\b(sr|ct)\b/gi, ' ').replace(/\s+/g, ' ').trim();
+  return t.length >= 2 ? t : undefined;
+}
+
 /** Match show program names — all significant words must appear (never match everything). */
 export function matchesProgram(program: string, needle: string): boolean {
   const hay = normalizeProgramText(program || '');
   const n = normalizeProgramText(needle || '');
   if (!n) return false;
-  const words = n.split(' ').filter(w => w.length >= 2);
-  if (words.length === 0) return n.length >= 2 && hay.includes(n);
+  const words = n.split(' ').filter(w => w.length >= 2 && w !== 'sr' && w !== 'ct');
+  if (words.length === 0) return n.length >= 2 && n !== 'sr' && n !== 'ct' && hay.includes(n);
   return words.every(w => hay.includes(w));
 }
 
@@ -197,7 +215,7 @@ export function parseShowQueryHints(text: string, today: string, currentYear: nu
   t = t
     .replace(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{2,4})?\b/gi, ' ')
     .replace(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s+\d{2,4})?\b/gi, ' ')
-    .replace(/\b(update|upadte|udate|change|set|same show|sound requirements?|sound reqs?|call time|floor mic[^.]*|for cello[^.]*|\d{1,2}:\d{2}(?:\s*(?:am|pm))?)\b/gi, ' ')
+    .replace(/\b(update|upadte|udate|upadre|change|set|same show|sound requirements?|sound reqs?|call time|floor mic[^.]*|for cello[^.]*|\d{1,2}:\d{2}(?:\s*(?:am|pm))?)\b/gi, ' ')
     .replace(/\b(SR|CT|and)\b/gi, ' ')
     .replace(/[.]+/g, ' ')
     .replace(/\s+/g, ' ')
@@ -209,8 +227,9 @@ export function parseShowQueryHints(text: string, today: string, currentYear: nu
 
 function isWeakProgramQuery(program?: string): boolean {
   if (!program?.trim()) return true;
-  const n = normalizeProgramText(program);
-  if (!n) return true;
+  const sanitized = sanitizeProgramQuery(program);
+  if (!sanitized) return true;
+  const n = normalizeProgramText(sanitized);
   if (/^(sr|ct|update|sound|call|time|requirements?|same show|venue|show)$/i.test(n)) return true;
   if (/^\d{1,2}(:\d{2})?$/.test(n)) return true;
   return n.split(' ').filter(w => w.length >= 2).length === 0;
@@ -219,11 +238,16 @@ function isWeakProgramQuery(program?: string): boolean {
 /** Detect update intent when the user didn't use a slash command. */
 export function inferUpdateTaskType(text: string): 'SR' | 'CT' | 'Venue' | null {
   const lower = text.toLowerCase();
-  const hasSR = /\b(update\s+sr|update\s+sound|sound requirements?|sound reqs?)\b/i.test(lower);
-  const hasCT = /\b(update\s+ct|update\s+call|call time)\b/i.test(lower);
+  const hasSR = /\b(?:update|upadte|udate|upadre)\s+sr\b/i.test(lower)
+    || /\bsr:\s/i.test(text)
+    || /\b(?:update|upadte|udate|upadre)\s+sound\b/i.test(lower)
+    || /\bsound requirements?\b/i.test(lower);
+  const hasCT = /\b(?:update|upadte|udate|upadre)\s+ct\b/i.test(lower)
+    || /\b(?:update|upadte|udate|upadre)\s+call\b/i.test(lower)
+    || /\bcall time\b/i.test(lower);
   if (hasSR) return 'SR';
   if (hasCT) return 'CT';
-  if (/\b(update\s+venue|change\s+venue)\b/i.test(lower)) return 'Venue';
+  if (/\b(?:update|upadte|udate|upadre)\s+venue\b/i.test(lower) || /\bchange\s+venue\b/i.test(lower)) return 'Venue';
   return null;
 }
 
@@ -357,7 +381,10 @@ CRITICAL: NEVER say "nothing on [date]" or "no shows" without first calling quer
 
 PAST DATES: If a show's event_date is before ${today}, it has already happened. For any update on a past show, drop one dry line about editing history (e.g. "That one's been and gone. Correcting the record?" or "Show's done. Someone losing sleep over the call time?" or "Already happened. Still want to poke at it?") — one line, not a lecture. Then ask once: "Say yes and I'll update it." Wait for confirmation before calling update_show.
 
-${taskInstruction ? taskInstruction + '\n\n' : ''}PERSONALITY:
+${taskInstruction ? taskInstruction + '\n\n' : ''}TASK CODES — operator shorthand, not show names:
+SR = update sound requirements. CT = update call time. Strip these from query_shows program= — search by the actual show name only. Partial names work: "young talent" finds "NCPA Young Talent" or any title containing those words.
+
+PERSONALITY:
 Eddy has been running sound at NCPA for fifteen years. Not excitable. Not performing. Just the one who already sorted it before you finished asking.
 
 Emotionally flat by default. No exclamation points, no overreaction, no warmth performance. When a quote generates cleanly, it generated. When a show isn't in the system, it isn't. Neither is surprising.
@@ -679,14 +706,21 @@ export async function executeTool(
         const past6m = new Date(today); past6m.setMonth(past6m.getMonth() - 6);
         const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
-        // For update tasks, backfill missing/weak filters from the user's message.
+        // SR/CT are task codes — strip before searching; partial show names are fine.
+        if (args.program) {
+          args.program = sanitizeProgramQuery(args.program);
+        }
+
+        // For update tasks, trust parsed hints from the user's message over the model's tool args.
         if (isUpdateTask) {
-          if (isWeakProgramQuery(args.program) && hints.program) args.program = hints.program;
-          if (!args.from && hints.from) {
+          if (hints.program) args.program = hints.program;
+          if (hints.from) {
             args.from = hints.from;
             args.to = hints.to ?? hints.from;
           }
         }
+
+        const specificDate = args.from && (!args.to || args.to === args.from);
 
         if (args.program) {
           if (!args.from) {
@@ -753,8 +787,8 @@ export async function executeTool(
           };
         }
 
-        // If show not found AND a specific date was given, widen ±7 days around that date
-        if (needle && !programOnly && (!result?.data || result.data.length === 0)) {
+        // If show not found on a specific date, widen ±7 days (even when searching by program name).
+        if (needle && specificDate && (!result?.data || result.data.length === 0)) {
           const base = new Date(args.from);
           const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
           const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
