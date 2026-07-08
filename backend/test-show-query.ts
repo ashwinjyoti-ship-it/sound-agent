@@ -1,4 +1,4 @@
-import { matchesProgram, parseShowQueryHints, inferUpdateTaskType, sanitizeProgramQuery } from './src/services/claude';
+import { matchesProgram, parseShowQueryHints, inferUpdateTaskType, sanitizeProgramQuery, findLastKnownProgram } from './src/services/claude';
 
 let failed = 0;
 function assert(cond: boolean, msg: string) {
@@ -42,6 +42,21 @@ assert(typoHints.from === '2026-07-05', `typo message date = ${typoHints.from}`)
 assert(inferUpdateTaskType('update SR young talent 5 July') === 'SR', 'infers SR from free text');
 assert(inferUpdateTaskType('udate SR young talent 5 July') === 'SR', 'infers SR from udate typo');
 assert(inferUpdateTaskType('call time update same show 14:00') === 'CT', 'infers CT from free text');
+
+// Date-only follow-up drops the show name — recover it from earlier in the conversation.
+const historyWithNameThenDate = [
+  { role: 'user', content: 'udate SR young talent 5 July. Floor mic for Cello.' },
+  { role: 'assistant', content: 'Nothing on the 5th for Young Talent — did you mean the 9th?' },
+  { role: 'user', content: 'no its the 9th' },
+];
+assert(
+  findLastKnownProgram(historyWithNameThenDate, '2026-07-08', 2026) === 'young talent',
+  'recovers show name from an earlier turn when the latest message only corrects the date',
+);
+assert(
+  findLastKnownProgram([{ role: 'user', content: 'no its the 9th' }], '2026-07-08', 2026) === undefined,
+  'no fallback when no prior message names a show',
+);
 
 if (failed) {
   console.error(`\n${failed} test(s) failed`);

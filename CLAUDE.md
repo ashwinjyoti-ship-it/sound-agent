@@ -47,7 +47,7 @@ Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
 
 | Tool | Params | Notes |
 |------|--------|-------|
-| `query_shows` | `from`, `to?`, `venue?`, `program?` | 0 results + program → auto ±7 day search |
+| `query_shows` | `from`, `to?`, `venue?`, `program?` | 0 results + program → auto ±30 day search |
 | `add_show` | `event_date`, `program`, `venue`, + optionals | |
 | `update_show` | `id` (required), patch fields | Must `query_shows` first; confirm before overwriting |
 | `get_crew_availability` | `date` | Merges crew DB + unavailability + shows |
@@ -60,7 +60,7 @@ Frontend extracts from ` ```json ``` ` blocks and renders structured cards.
 - Update flow: search → show existing data → confirm before overwriting
 - Quote: always emit JSON card, never text summary
 - Show query: plain text for 1-2 fields (read all queried fields from tool result); JSON card (incl. `sound_requirements`) for ≥3 fields or general overview
-- Nearby search: widen ±7 days automatically if show not found — don't ask
+- Nearby search: widen ±30 days automatically if show not found. Plain lookup → state the date found, don't ask. SR/CT/Venue update task → ask "did you mean [date]?" and wait for confirmation before writing
 - **Never answer "nothing on [date]" without calling `query_shows` first** — backend enforces this with a hallucination guard
 
 ## Frontend Rendering (`app.js`)

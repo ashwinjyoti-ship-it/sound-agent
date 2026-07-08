@@ -255,6 +255,23 @@ export interface ToolContext {
   activeTask?: { type: string; prefix: string } | null;
   lastUserMessage?: string;
   currentYear?: number;
+  lastKnownProgram?: string;
+}
+
+/** Scan the conversation backwards for the most recent message that names a show — used when a
+ * follow-up (e.g. "no it's the 9th") corrects a date without repeating the show name. Only
+ * considers messages that actually framed an update (inferUpdateTaskType) — plain chatter like
+ * "no its the 9th" would otherwise be misread as a program name. */
+export function findLastKnownProgram(messages: any[], today: string, currentYear: number): string | undefined {
+  for (let i = messages.length - 1; i >= 0; i--) {
+    const m = messages[i];
+    if (m.role !== 'user') continue;
+    const text = typeof m.content === 'string' ? m.content : extractText(m.content);
+    if (!text || !inferUpdateTaskType(text)) continue;
+    const hints = parseShowQueryHints(text, today, currentYear);
+    if (hints.program && !isWeakProgramQuery(hints.program)) return hints.program;
+  }
+  return undefined;
 }
 
 function stripJsonBlocks(text: string): string {
@@ -347,9 +364,9 @@ export async function handleDeleteShowMessage(
 
 export function buildTaskInstructions(today: string): Record<string, string> {
   return {
-    CT: 'ACTIVE TASK — Update call time. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If the user also mentions sound requirements in the same message, note both changes and confirm together before saving. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
-    SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If the user also mentions call time in the same message, note both changes and confirm together before saving. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
-    Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
+    CT: 'ACTIVE TASK — Update call time. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If the user also mentions sound requirements in the same message, note both changes and confirm together before saving. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope. If the result has nearbySearch true (no show on the date given, but the same name turned up within 30 days), do NOT update yet — ask "Nothing on [requested date] — did you mean [event_date]?" and wait for a yes before calling update_show.',
+    SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If the user also mentions call time in the same message, note both changes and confirm together before saving. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating. If the result has nearbySearch true (no show on the date given, but the same name turned up within 30 days), do NOT update yet — ask "Nothing on [requested date] — did you mean [event_date]?" and wait for a yes before calling update_show.',
+    Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating. If the result has nearbySearch true (no show on the date given, but the same name turned up within 30 days), do NOT update yet — ask "Nothing on [requested date] — did you mean [event_date]?" and wait for a yes before calling update_show.',
     Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
     Add: `ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving: if the show date is in the current month (${today.slice(0, 7)}), call get_crew_availability for that date. If the show is in any other month, stop — do not call get_crew_availability.`,
     Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
@@ -418,7 +435,7 @@ GDT / Godrej / Godrej Dance / Godrej Dance Theatre → Godrej Dance Theatre
 Any other venue name (e.g. "JBT Museum", "NCPA Lawns", "Mehli Mehta Hall") → pass as-is, no validation
 
 TOOLS — what they do and when to use them:
-query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements — including follow-up questions about a show already discussed earlier in the conversation. Never answer from conversation memory; always re-query for current values. Show name with no date → pass program= only, omit from/to entirely — the backend searches 1 year back to 2 years forward automatically. Never ask the user for a date or alternate name when a show name has been given; just call the tool. Not found on an exact date → widen ±7 days, no need to ask.
+query_shows: fetch live schedule data. Use for any question about shows, dates, crew, call times, or requirements — including follow-up questions about a show already discussed earlier in the conversation. Never answer from conversation memory; always re-query for current values. Show name with no date → pass program= only, omit from/to entirely — the backend searches 1 year back to 2 years forward automatically. Never ask the user for a date or alternate name when a show name has been given; just call the tool. Not found on an exact date → the backend widens ±30 days automatically and flags nearbySearch — for a plain lookup, just state the date found; for an update task (SR/CT/Venue), ask for confirmation first (see task instructions).
 add_show: create a new show. Minimum: event_date, program, venue. Don't ask for call_time if not given. After saving, call get_crew_availability for the same date. The backend will render a show card automatically — do not confirm in text.
 update_show: patch a show's fields including venue (free text, any location). Always call query_shows immediately before this — even if you have the show ID from earlier in the conversation — to get current field values. Never assume a field is empty from context; the data may have changed. Show existing values for any field being overwritten and get confirmation. MULTI-DATE RUNS: if query_shows returns the same program across multiple dates, before patching ask "Just [specific date], or all [N] dates in this run ([date list])?" — then call update_show once per ID for the confirmed scope. After it succeeds, confirm briefly — that's it.
 get_crew_availability: crew status for a date. Call this for ANY question about who's available, who to assign, or who's working a show. The backend renders the result as an interactive picker card — never generate crew data or crew JSON yourself, and never list crew as plain text. The card only appears when this tool is called.
@@ -438,7 +455,7 @@ SHOW DISPLAY:
 {"type":"shows","shows":[{"id":0,"event_date":"...","program":"...","venue":"...","call_time":"...","foh_crew":"...","stage_crew":"...","sound_requirements":"..."}]}
 \`\`\`
   Use empty string "" for genuinely null/empty fields.
-- If nearbySearch is true: mention the actual date found. "Nothing on the 26th — it's the 28th."
+- If nearbySearch is true on a plain lookup (no active update task): mention the actual date found. "Nothing on the 26th — it's the 28th." On an SR/CT/Venue update task, don't state it as fact — ask for confirmation first (see task instructions).
 
 QUOTE RULES:
 - After generate_quote succeeds, write ONE short punchy quip in Eddy's voice (fresh each time, never repeat), then the JSON block:
@@ -483,6 +500,7 @@ export async function chatWithClaude(
     activeTask: effectiveTask,
     lastUserMessage: rawLastContent,
     currentYear,
+    lastKnownProgram: findLastKnownProgram(messages, today, currentYear),
   };
 
   let currentMessages = messages.map((m: any) => {
@@ -720,6 +738,12 @@ export async function executeTool(
           }
         }
 
+        // Date-only follow-up (e.g. "no it's the 9th") names no show — recover the last
+        // show named earlier in the conversation so we don't lose the filter entirely.
+        if (isUpdateTask && !args.program && ctx.lastKnownProgram) {
+          args.program = ctx.lastKnownProgram;
+        }
+
         const specificDate = args.from && (!args.to || args.to === args.from);
 
         if (args.program) {
@@ -741,7 +765,7 @@ export async function executeTool(
           if (!args.to) args.to = oneYearOut;
         }
 
-        // programOnly controls whether the ±7-day fallback fires — skip it when
+        // programOnly controls whether the ±30-day fallback fires — skip it when
         // we already searched the full window.
         const programOnly = !!args.program;
         const to = args.to || args.from;
@@ -787,11 +811,11 @@ export async function executeTool(
           };
         }
 
-        // If show not found on a specific date, widen ±7 days (even when searching by program name).
+        // If show not found on a specific date, widen ±30 days (even when searching by program name).
         if (needle && specificDate && (!result?.data || result.data.length === 0)) {
           const base = new Date(args.from);
-          const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 7);
-          const searchTo = new Date(base); searchTo.setDate(base.getDate() + 7);
+          const searchFrom = new Date(base); searchFrom.setDate(base.getDate() - 30);
+          const searchTo = new Date(base); searchTo.setDate(base.getDate() + 30);
           const fmt = (d: Date) => d.toISOString().slice(0, 10);
           const wider = (await orchestrator.getShows({ from: fmt(searchFrom), to: fmt(searchTo) })) as any;
           if (wider?.data?.length) {
