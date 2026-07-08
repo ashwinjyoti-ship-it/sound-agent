@@ -8,6 +8,8 @@ import {
   handleAssignCrewMessage,
   handleDeleteShowMessage,
   extractText,
+  inferUpdateTaskType,
+  ToolContext,
 } from './claude';
 
 const GEMINI_MODEL = 'gemini-3.1-pro-preview';
@@ -92,8 +94,15 @@ export async function chatWithGemini(
 
   const prefixToStrip = activeTask?.prefix || '';
   const taskInstructions = buildTaskInstructions(today);
-  const taskInstruction = activeTask ? (taskInstructions[activeTask.type] || '') : '';
+  const inferredTaskType = !activeTask ? inferUpdateTaskType(rawLastContent) : null;
+  const effectiveTask = activeTask || (inferredTaskType ? { type: inferredTaskType, prefix: '' } : null);
+  const taskInstruction = effectiveTask ? (taskInstructions[effectiveTask.type] || '') : '';
   const systemPrompt = buildSystemPrompt(today, currentYear, taskInstruction);
+  const toolContext: ToolContext = {
+    activeTask: effectiveTask,
+    lastUserMessage: rawLastContent,
+    currentYear,
+  };
 
   const strippedMessages = messages.map((m: any) => {
     if (prefixToStrip && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith(prefixToStrip)) {
@@ -103,7 +112,7 @@ export async function chatWithGemini(
   });
 
   const FORCE_TOOL_TASKS = new Set(['CT', 'SR', 'Venue', 'Delete', 'Assign', 'Crew', 'Quote', 'Add']);
-  let forceToolCall = !!(activeTask && FORCE_TOOL_TASKS.has(activeTask.type));
+  let forceToolCall = !!(effectiveTask && FORCE_TOOL_TASKS.has(effectiveTask.type));
   const maxLoops = 6;
 
   // Gemini tracks messages with tool names so we can map responses back
@@ -211,7 +220,7 @@ export async function chatWithGemini(
       }
 
       const taskDone = updateShowSucceeded || manageDayOffSucceeded
-        || (lastToolName === 'query_shows' && activeTask?.type === 'Delete');
+        || (lastToolName === 'query_shows' && effectiveTask?.type === 'Delete');
       const baseParts = [addShowCard, textContent || (addShowCard ? null : 'Done.')].filter(Boolean);
       return { reply: baseParts.join('\n'), taskDone: taskDone || !!addShowCard };
     }
@@ -230,7 +239,7 @@ export async function chatWithGemini(
     const toolResults: Array<{ name: string; result: any }> = [];
     for (const fc of functionCalls) {
       const toolBlock = { name: fc.functionCall.name, input: fc.functionCall.args };
-      const result = await executeTool(toolBlock, orchestrator, today, oneYearOut);
+      const result = await executeTool(toolBlock, orchestrator, today, oneYearOut, toolContext);
       lastToolName = toolBlock.name;
       lastToolResult = result;
       toolResults.push({ name: toolBlock.name, result });

@@ -129,6 +129,110 @@ export function extractText(content: any): string {
   return '';
 }
 
+const UPDATE_TASK_TYPES = new Set(['SR', 'CT', 'Venue']);
+
+function normalizeProgramText(s: string): string {
+  return s.toLowerCase().replace(/[''`]/g, '').replace(/[–—\-]/g, ' ').replace(/\s+/g, ' ').trim();
+}
+
+/** Match show program names — all significant words must appear (never match everything). */
+export function matchesProgram(program: string, needle: string): boolean {
+  const hay = normalizeProgramText(program || '');
+  const n = normalizeProgramText(needle || '');
+  if (!n) return false;
+  const words = n.split(' ').filter(w => w.length >= 2);
+  if (words.length === 0) return n.length >= 2 && hay.includes(n);
+  return words.every(w => hay.includes(w));
+}
+
+const MONTHS: Record<string, number> = {
+  jan: 1, january: 1, feb: 2, february: 2, mar: 3, march: 3, apr: 4, april: 4,
+  may: 5, jun: 6, june: 6, jul: 7, july: 7, aug: 8, august: 8,
+  sep: 9, sept: 9, september: 9, oct: 10, october: 10, nov: 11, november: 11, dec: 12, december: 12,
+};
+
+function parseYear(part: string | undefined, currentYear: number): number {
+  if (!part) return currentYear;
+  const y = parseInt(part, 10);
+  return y < 100 ? 2000 + y : y;
+}
+
+function toIsoDate(year: number, month: number, day: number): string | null {
+  if (month < 1 || month > 12 || day < 1 || day > 31) return null;
+  return `${year}-${String(month).padStart(2, '0')}-${String(day).padStart(2, '0')}`;
+}
+
+/** Pull show name + date hints from free-text update messages. */
+export function parseShowQueryHints(text: string, today: string, currentYear: number): { program?: string; from?: string; to?: string } {
+  const hints: { program?: string; from?: string; to?: string } = {};
+  let t = text.replace(/^(SR|CT|Venue|Delete|Assign|Add|Crew|Quote|Day-off):\s*/i, '').trim();
+
+  const dayMonth = t.match(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+(\d{2,4}))?\b/i);
+  const monthDay = t.match(/\b(jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+(\d{1,2})(?:st|nd|rd|th)?(?:\s+(\d{2,4}))?\b/i);
+
+  let day: number | null = null;
+  let monthKey: string | null = null;
+  let yearPart: string | undefined;
+  if (dayMonth) {
+    day = parseInt(dayMonth[1], 10);
+    monthKey = dayMonth[2].toLowerCase();
+    yearPart = dayMonth[3];
+  } else if (monthDay) {
+    monthKey = monthDay[1].toLowerCase();
+    day = parseInt(monthDay[2], 10);
+    yearPart = monthDay[3];
+  }
+
+  if (day && monthKey) {
+    const month = MONTHS[monthKey] ?? MONTHS[monthKey.slice(0, 3)];
+    if (month) {
+      const iso = toIsoDate(parseYear(yearPart, currentYear), month, day);
+      if (iso) {
+        hints.from = iso;
+        hints.to = iso;
+      }
+    }
+  }
+
+  t = t
+    .replace(/\b(\d{1,2})(?:st|nd|rd|th)?\s+(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)(?:\s+\d{2,4})?\b/gi, ' ')
+    .replace(/\b(?:jan(?:uary)?|feb(?:ruary)?|mar(?:ch)?|apr(?:il)?|may|june?|july?|aug(?:ust)?|sep(?:t(?:ember)?)?|oct(?:ober)?|nov(?:ember)?|dec(?:ember)?)\s+\d{1,2}(?:st|nd|rd|th)?(?:\s+\d{2,4})?\b/gi, ' ')
+    .replace(/\b(update|upadte|udate|change|set|same show|sound requirements?|sound reqs?|call time|floor mic[^.]*|for cello[^.]*|\d{1,2}:\d{2}(?:\s*(?:am|pm))?)\b/gi, ' ')
+    .replace(/\b(SR|CT|and)\b/gi, ' ')
+    .replace(/[.]+/g, ' ')
+    .replace(/\s+/g, ' ')
+    .trim();
+
+  if (t.length >= 3) hints.program = t;
+  return hints;
+}
+
+function isWeakProgramQuery(program?: string): boolean {
+  if (!program?.trim()) return true;
+  const n = normalizeProgramText(program);
+  if (!n) return true;
+  if (/^(sr|ct|update|sound|call|time|requirements?|same show|venue|show)$/i.test(n)) return true;
+  if (/^\d{1,2}(:\d{2})?$/.test(n)) return true;
+  return n.split(' ').filter(w => w.length >= 2).length === 0;
+}
+
+/** Detect update intent when the user didn't use a slash command. */
+export function inferUpdateTaskType(text: string): 'SR' | 'CT' | 'Venue' | null {
+  const lower = text.toLowerCase();
+  const hasSR = /\b(update\s+sr|update\s+sound|sound requirements?|sound reqs?)\b/i.test(lower);
+  const hasCT = /\b(update\s+ct|update\s+call|call time)\b/i.test(lower);
+  if (hasSR) return 'SR';
+  if (hasCT) return 'CT';
+  if (/\b(update\s+venue|change\s+venue)\b/i.test(lower)) return 'Venue';
+  return null;
+}
+
+export interface ToolContext {
+  activeTask?: { type: string; prefix: string } | null;
+  lastUserMessage?: string;
+  currentYear?: number;
+}
+
 function stripJsonBlocks(text: string): string {
   return text.replace(/```json[\s\S]*?```/g, '').trim();
 }
@@ -219,9 +323,9 @@ export async function handleDeleteShowMessage(
 
 export function buildTaskInstructions(today: string): Record<string, string> {
   return {
-    CT: 'ACTIVE TASK — Update call time. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
-    SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
-    Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
+    CT: 'ACTIVE TASK — Update call time. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show the current call_time. If the new time is in the message, confirm before saving. If not, ask for it in one question. If the user also mentions sound requirements in the same message, note both changes and confirm together before saving. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates in this run ([list])?" before updating — apply only the confirmed scope.',
+    SR: 'ACTIVE TASK — Update sound requirements. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show the current sound_requirements. If new requirements are in the message, confirm before saving. If not, ask for them in one question. If the user also mentions call time in the same message, note both changes and confirm together before saving. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
+    Venue: 'ACTIVE TASK — Change venue. Call query_shows immediately with whatever the user gave — name only is enough, do not ask for a date. Pass program= with the show name and from/to when a date is given. Show current venue. Confirm new venue before saving. Venue is free text — accept any location, not just standard NCPA venues. If query_shows returns multiple dates of the same program, ask "Just [date] or all [N] dates ([list])?" before updating.',
     Assign: 'ACTIVE TASK — Assign crew. Find the show from whatever the user gave (name, date, or both, any order). Then call get_crew_availability to show the interactive picker.',
     Add: `ACTIVE TASK — Add a new show. Pull date, program, venue from the message. Ask only for what is genuinely missing. After saving: if the show date is in the current month (${today.slice(0, 7)}), call get_crew_availability for that date. If the show is in any other month, stop — do not call get_crew_availability.`,
     Quote: 'ACTIVE TASK — Generate equipment quote. Call generate_quote immediately with the items named. No clarification needed — the tool handles fuzzy matching.',
@@ -344,8 +448,15 @@ export async function chatWithClaude(
 
   const prefixToStrip = activeTask?.prefix || '';
   const taskInstructions = buildTaskInstructions(today);
-  const taskInstruction = activeTask ? (taskInstructions[activeTask.type] || '') : '';
+  const inferredTaskType = !activeTask ? inferUpdateTaskType(rawLastContent) : null;
+  const effectiveTask = activeTask || (inferredTaskType ? { type: inferredTaskType, prefix: '' } : null);
+  const taskInstruction = effectiveTask ? (taskInstructions[effectiveTask.type] || '') : '';
   const systemPrompt = buildSystemPrompt(today, currentYear, taskInstruction);
+  const toolContext: ToolContext = {
+    activeTask: effectiveTask,
+    lastUserMessage: rawLastContent,
+    currentYear,
+  };
 
   let currentMessages = messages.map((m: any) => {
     if (prefixToStrip && m.role === 'user' && typeof m.content === 'string' && m.content.startsWith(prefixToStrip)) {
@@ -362,7 +473,7 @@ export async function chatWithClaude(
   // Force a tool call on loop 0 for tasks that must query data before responding.
   // DayOff is excluded: it legitimately responds with a date-expansion confirmation first.
   const FORCE_TOOL_TASKS = new Set(['CT', 'SR', 'Venue', 'Delete', 'Assign', 'Crew', 'Quote', 'Add']);
-  let forceToolCall = !!(activeTask && FORCE_TOOL_TASKS.has(activeTask.type));
+  let forceToolCall = !!(effectiveTask && FORCE_TOOL_TASKS.has(effectiveTask.type));
 
   for (let loop = 0; loop < maxLoops; loop++) {
     const response = await fetchWithRetry(CLAUDE_API_URL, {
@@ -469,9 +580,11 @@ export async function chatWithClaude(
         return { reply: parts.join('\n'), taskDone: true };
       }
 
-      // Force shows card when query_shows returns 2+ results — AI writes the quip, backend owns the format.
-      // Skip for Delete task (card rendered differently with delete button).
-      if (lastToolName === 'query_shows' && (lastToolResult?.data?.length ?? 0) >= 2 && activeTask?.type !== 'Delete') {
+      // Force shows card when query_shows returns 2+ results — but never dump the
+      // full schedule during a targeted update (SR/CT/Venue); let Eddy disambiguate.
+      if (lastToolName === 'query_shows' && (lastToolResult?.data?.length ?? 0) >= 2
+          && effectiveTask?.type !== 'Delete'
+          && !(effectiveTask && UPDATE_TASK_TYPES.has(effectiveTask.type))) {
         const showsJson = `\`\`\`json\n${JSON.stringify({
           type: 'shows',
           shows: lastToolResult.data.map((s: any) => ({
@@ -491,7 +604,7 @@ export async function chatWithClaude(
       }
 
       const taskDone = updateShowSucceeded || manageDayOffSucceeded
-        || (lastToolName === 'query_shows' && activeTask?.type === 'Delete');
+        || (lastToolName === 'query_shows' && effectiveTask?.type === 'Delete');
       const baseParts = [addShowCard, stripJsonBlocks(textContent).trim() || (addShowCard ? null : 'Done.')].filter(Boolean);
       return { reply: baseParts.join('\n'), taskDone: taskDone || !!addShowCard };
     }
@@ -502,7 +615,7 @@ export async function chatWithClaude(
     // Execute all tool calls, collect results
     const toolResults: Array<{ id: string; result: any }> = [];
     for (const toolBlock of toolUseBlocks) {
-      const result = await executeTool(toolBlock, orchestrator, today, oneYearOut);
+      const result = await executeTool(toolBlock, orchestrator, today, oneYearOut, toolContext);
       lastToolName = toolBlock.name;
       lastToolResult = result;
       toolResults.push({ id: toolBlock.id, result });
@@ -526,9 +639,19 @@ export async function chatWithClaude(
   return { reply: 'Hit the tool-call limit on that one — try breaking it into smaller questions.', taskDone: false };
 }
 
-export async function executeTool(toolBlock: any, orchestrator: OrchestratorClient, today: string, oneYearOut: string): Promise<any> {
+export async function executeTool(
+  toolBlock: any,
+  orchestrator: OrchestratorClient,
+  today: string,
+  oneYearOut: string,
+  ctx: ToolContext = {},
+): Promise<any> {
   const name = toolBlock.name;
-  const args = toolBlock.input || {};
+  const args = { ...(toolBlock.input || {}) };
+  const isUpdateTask = !!(ctx.activeTask && UPDATE_TASK_TYPES.has(ctx.activeTask.type));
+  const hints = (isUpdateTask && ctx.lastUserMessage)
+    ? parseShowQueryHints(ctx.lastUserMessage, today, ctx.currentYear ?? new Date().getUTCFullYear())
+    : {};
 
   const VENUE_GROUPS: string[][] = [
     ['tt', 'tata', 'tatatheatre', 'tatamainstage'],
@@ -550,25 +673,29 @@ export async function executeTool(toolBlock: any, orchestrator: OrchestratorClie
     return VENUE_GROUPS.some(g => g.includes(dk) && g.includes(qk));
   }
 
-  function matchesProgram(program: string, needle: string): boolean {
-    const normalize = (s: string) => s.toLowerCase().replace(/[''`]/g, '').replace(/[–—\-]/g, ' ').replace(/\s+/g, ' ').trim();
-    const hay = normalize(program || '');
-    const words = normalize(needle).split(' ').filter(w => w.length >= 2);
-    if (words.length === 0) return hay.includes(normalize(needle));
-    return words.some(w => hay.includes(w));
-  }
-
   try {
     switch (name) {
       case 'query_shows': {
         const past6m = new Date(today); past6m.setMonth(past6m.getMonth() - 6);
         const fmt = (d: Date) => d.toISOString().slice(0, 10);
 
+        // For update tasks, backfill missing/weak filters from the user's message.
+        if (isUpdateTask) {
+          if (isWeakProgramQuery(args.program) && hints.program) args.program = hints.program;
+          if (!args.from && hints.from) {
+            args.from = hints.from;
+            args.to = hints.to ?? hints.from;
+          }
+        }
+
         if (args.program) {
           if (!args.from) {
             // No date given at all: search full window (6 months back so past shows are findable)
             args.from = fmt(past6m);
             args.to = oneYearOut;
+          } else if (isUpdateTask && hints.from && hints.to && args.from === hints.from) {
+            // User named a specific date — keep the search tight unless we need multi-date disambiguation.
+            args.to = hints.to;
           } else if (!args.to || args.to === args.from) {
             // AI anchored to a date but gave no end (or same-day range, i.e. a default) —
             // extend forward so the show is found even if it's not on that exact date.
@@ -605,6 +732,25 @@ export async function executeTool(toolBlock: any, orchestrator: OrchestratorClie
           result.data = result.data.filter((s: any) =>
             matchesProgram(s.program, needle)
           );
+        }
+
+        // Update tasks should never return an unfiltered schedule dump.
+        if (isUpdateTask && !needle && (result?.data?.length ?? 0) > 10) {
+          return {
+            success: true,
+            data: [],
+            error: 'Too many shows returned — pass program= with the show name (and from/to if a date was given).',
+            tooManyResults: true,
+          };
+        }
+
+        if (isUpdateTask && needle && (result?.data?.length ?? 0) > 15) {
+          return {
+            success: true,
+            data: result.data.slice(0, 15),
+            error: `Found ${result.data.length} matches for "${args.program}" — narrow with a date or more of the show name.`,
+            tooManyResults: true,
+          };
         }
 
         // If show not found AND a specific date was given, widen ±7 days around that date
