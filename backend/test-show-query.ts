@@ -1,4 +1,4 @@
-import { matchesProgram, parseShowQueryHints, inferUpdateTaskType } from './src/services/claude';
+import { matchesProgram, parseShowQueryHints, inferUpdateTaskType, sanitizeProgramQuery } from './src/services/claude';
 
 let failed = 0;
 function assert(cond: boolean, msg: string) {
@@ -18,6 +18,9 @@ assert(!matchesProgram('Absence of Presence', 'young talent'), 'unrelated show r
 assert(matchesProgram('NCPA Young Talent Festival', 'young talent'), 'partial title match');
 assert(!matchesProgram('Some Show', 'young'), 'single word "young" alone does not match unrelated show');
 assert(matchesProgram('Some Young Show', 'young'), 'single significant word matches');
+assert(matchesProgram('NCPA Young Talent Festival', 'sr young talent'), 'SR stripped — partial title still matches');
+assert(sanitizeProgramQuery('SR Young Talent') === 'Young Talent', 'sanitize strips SR prefix');
+assert(sanitizeProgramQuery('sr young talent') === 'young talent', 'sanitize strips sr token');
 
 const hints = parseShowQueryHints(
   'SR: young talent 5 July. Floor mic for Cello. And call time update same show 14:00',
@@ -28,7 +31,16 @@ assert(hints.program === 'young talent', `program hint = "${hints.program}"`);
 assert(hints.from === '2026-07-05', `date hint from = ${hints.from}`);
 assert(hints.to === '2026-07-05', `date hint to = ${hints.to}`);
 
+const typoHints = parseShowQueryHints(
+  'udate SR young talent 5 July. Floor mic for Cello. And call time upadre same show 14:00',
+  '2026-07-08',
+  2026,
+);
+assert(typoHints.program === 'young talent', `typo message program = "${typoHints.program}"`);
+assert(typoHints.from === '2026-07-05', `typo message date = ${typoHints.from}`);
+
 assert(inferUpdateTaskType('update SR young talent 5 July') === 'SR', 'infers SR from free text');
+assert(inferUpdateTaskType('udate SR young talent 5 July') === 'SR', 'infers SR from udate typo');
 assert(inferUpdateTaskType('call time update same show 14:00') === 'CT', 'infers CT from free text');
 
 if (failed) {
