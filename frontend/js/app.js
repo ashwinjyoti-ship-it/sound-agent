@@ -255,6 +255,11 @@ async function sendMessage() {
   saveMessages();
   textInp.textContent = '';
 
+  // Keep delete flow active across follow-ups (e.g. "yes" after a past-show warning).
+  if (!activeTask && /\b(delete|remove|cancel|delet)\b/i.test(text) && /\bshow\b/i.test(text)) {
+    activeTask = { type: 'Delete', prefix: '' };
+  }
+
   const loadingId = addLoading();
   sendBtn.disabled = true;
 
@@ -291,7 +296,9 @@ async function sendMessage() {
     }
 
     const structured = tryParseStructured(reply);
+    const quip = stripJsonBlocks(reply);
     if (structured) {
+      if (quip) addMsg('assistant', quip);
       renderStructured(structured, text);
     } else {
       addMsg('assistant', reply);
@@ -373,6 +380,11 @@ function tryParseStructured(text) {
   } catch {
     return null;
   }
+}
+
+function stripJsonBlocks(text) {
+  if (!text) return '';
+  return text.replace(/```json[\s\S]*?```/g, '').trim();
 }
 
 function renderStructured(data, userText) {
