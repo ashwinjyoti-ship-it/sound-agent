@@ -235,6 +235,34 @@ function isWeakProgramQuery(program?: string): boolean {
   return n.split(' ').filter(w => w.length >= 2).length === 0;
 }
 
+/** Natural-language delete intent (slash command or "delete show …"). */
+export function hasDeleteIntent(text: string): boolean {
+  if (/^delete:\s/i.test(text)) return true;
+  const lower = text.toLowerCase();
+  return /\b(delete|remove|cancel)\b/.test(lower) && /\bshow\b/.test(lower);
+}
+
+/** Detect delete intent when the user didn't use a slash command. */
+export function inferDeleteTaskType(text: string): 'Delete' | null {
+  return hasDeleteIntent(text) ? 'Delete' : null;
+}
+
+export function buildShowsCardJson(shows: any[]): string {
+  return `\`\`\`json\n${JSON.stringify({
+    type: 'shows',
+    shows: shows.map((s: any) => ({
+      id: s.id ?? 0,
+      event_date: s.event_date || '',
+      program: s.program || '',
+      venue: s.venue || '',
+      call_time: s.call_time || '',
+      foh_crew: s.foh_crew || '',
+      stage_crew: s.stage_crew || '',
+      sound_requirements: s.sound_requirements || '',
+    })),
+  })}\n\`\`\``;
+}
+
 /** Detect update intent when the user didn't use a slash command. */
 export function inferUpdateTaskType(text: string): 'SR' | 'CT' | 'Venue' | null {
   const lower = text.toLowerCase();
@@ -492,8 +520,11 @@ export async function chatWithClaude(
 
   const prefixToStrip = activeTask?.prefix || '';
   const taskInstructions = buildTaskInstructions(today);
+  const inferredDeleteType = !activeTask ? inferDeleteTaskType(rawLastContent) : null;
   const inferredTaskType = !activeTask ? inferUpdateTaskType(rawLastContent) : null;
-  const effectiveTask = activeTask || (inferredTaskType ? { type: inferredTaskType, prefix: '' } : null);
+  const effectiveTask = activeTask
+    || (inferredDeleteType ? { type: inferredDeleteType, prefix: '' } : null)
+    || (inferredTaskType ? { type: inferredTaskType, prefix: '' } : null);
   const taskInstruction = effectiveTask ? (taskInstructions[effectiveTask.type] || '') : '';
   const systemPrompt = buildSystemPrompt(today, currentYear, taskInstruction);
   const toolContext: ToolContext = {
@@ -625,31 +656,26 @@ export async function chatWithClaude(
         return { reply: parts.join('\n'), taskDone: true };
       }
 
-      // Force shows card when query_shows returns 2+ results — but never dump the
-      // full schedule during a targeted update (SR/CT/Venue); let Eddy disambiguate.
-      if (lastToolName === 'query_shows' && (lastToolResult?.data?.length ?? 0) >= 2
-          && effectiveTask?.type !== 'Delete'
-          && !(effectiveTask && UPDATE_TASK_TYPES.has(effectiveTask.type))) {
-        const showsJson = `\`\`\`json\n${JSON.stringify({
-          type: 'shows',
-          shows: lastToolResult.data.map((s: any) => ({
-            id: s.id ?? 0,
-            event_date: s.event_date || '',
-            program: s.program || '',
-            venue: s.venue || '',
-            call_time: s.call_time || '',
-            foh_crew: s.foh_crew || '',
-            stage_crew: s.stage_crew || '',
-            sound_requirements: s.sound_requirements || '',
-          })),
-        })}\n\`\`\``;
+      // Delete flow — always surface the show card with the Delete button.
+      const deleteFlow = effectiveTask?.type === 'Delete' || hasDeleteIntent(rawLastContent);
+      if (lastToolName === 'query_shows' && deleteFlow && (lastToolResult?.data?.length ?? 0) >= 1) {
+        const showsJson = buildShowsCardJson(lastToolResult.data);
         const quip = stripJsonBlocks(textContent).trim();
         const parts = [addShowCard, quip || null, showsJson].filter(Boolean);
         return { reply: parts.join('\n'), taskDone: false };
       }
 
-      const taskDone = updateShowSucceeded || manageDayOffSucceeded
-        || (lastToolName === 'query_shows' && effectiveTask?.type === 'Delete');
+      // Force shows card when query_shows returns 2+ results — but never dump the
+      // full schedule during a targeted update (SR/CT/Venue); let Eddy disambiguate.
+      if (lastToolName === 'query_shows' && (lastToolResult?.data?.length ?? 0) >= 2
+          && !(effectiveTask && UPDATE_TASK_TYPES.has(effectiveTask.type))) {
+        const showsJson = buildShowsCardJson(lastToolResult.data);
+        const quip = stripJsonBlocks(textContent).trim();
+        const parts = [addShowCard, quip || null, showsJson].filter(Boolean);
+        return { reply: parts.join('\n'), taskDone: false };
+      }
+
+      const taskDone = updateShowSucceeded || manageDayOffSucceeded;
       const baseParts = [addShowCard, stripJsonBlocks(textContent).trim() || (addShowCard ? null : 'Done.')].filter(Boolean);
       return { reply: baseParts.join('\n'), taskDone: taskDone || !!addShowCard };
     }

@@ -9,6 +9,9 @@ import {
   handleDeleteShowMessage,
   extractText,
   inferUpdateTaskType,
+  inferDeleteTaskType,
+  hasDeleteIntent,
+  buildShowsCardJson,
   ToolContext,
 } from './claude';
 
@@ -94,8 +97,11 @@ export async function chatWithGemini(
 
   const prefixToStrip = activeTask?.prefix || '';
   const taskInstructions = buildTaskInstructions(today);
+  const inferredDeleteType = !activeTask ? inferDeleteTaskType(rawLastContent) : null;
   const inferredTaskType = !activeTask ? inferUpdateTaskType(rawLastContent) : null;
-  const effectiveTask = activeTask || (inferredTaskType ? { type: inferredTaskType, prefix: '' } : null);
+  const effectiveTask = activeTask
+    || (inferredDeleteType ? { type: inferredDeleteType, prefix: '' } : null)
+    || (inferredTaskType ? { type: inferredTaskType, prefix: '' } : null);
   const taskInstruction = effectiveTask ? (taskInstructions[effectiveTask.type] || '') : '';
   const systemPrompt = buildSystemPrompt(today, currentYear, taskInstruction);
   const toolContext: ToolContext = {
@@ -219,8 +225,15 @@ export async function chatWithGemini(
         return { reply: resultParts.join('\n'), taskDone: true };
       }
 
-      const taskDone = updateShowSucceeded || manageDayOffSucceeded
-        || (lastToolName === 'query_shows' && effectiveTask?.type === 'Delete');
+      const deleteFlow = effectiveTask?.type === 'Delete' || hasDeleteIntent(rawLastContent);
+      if (lastToolName === 'query_shows' && deleteFlow && (lastToolResult?.data?.length ?? 0) >= 1) {
+        const showsJson = buildShowsCardJson(lastToolResult.data);
+        const quip = textContent.replace(/```json[\s\S]*?```/g, '').trim();
+        const parts = [addShowCard, quip || null, showsJson].filter(Boolean);
+        return { reply: parts.join('\n'), taskDone: false };
+      }
+
+      const taskDone = updateShowSucceeded || manageDayOffSucceeded;
       const baseParts = [addShowCard, textContent || (addShowCard ? null : 'Done.')].filter(Boolean);
       return { reply: baseParts.join('\n'), taskDone: taskDone || !!addShowCard };
     }
