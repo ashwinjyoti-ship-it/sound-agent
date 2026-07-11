@@ -973,7 +973,13 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
     const itemLower = itemNorm.toLowerCase();
     // Keep numeric terms — model numbers (Beta 52, Beta 91, SM58...) are often
     // the only thing distinguishing one mic from another in the same family.
-    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0);
+    // Also split each word on letter/digit boundaries ("beta91" -> "beta", "91")
+    // since shorthand like "beta91" or "beta52" glues the model number to the name.
+    const rawWords = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0);
+    const allTerms = [...new Set(rawWords.flatMap((w: string) => {
+      const parts = w.match(/[a-z]+|[0-9]+/g) || [w];
+      return parts.length > 1 ? [w, ...parts] : [w];
+    }))];
 
     let bestMatch: any = null;
     let bestScore = 0;
