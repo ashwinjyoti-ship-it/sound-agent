@@ -971,7 +971,9 @@ async function generateEquipmentQuote(items: string[], orchestrator: Orchestrato
       .replace(/\s*[-xX×]\s*\d+$/, '')   // "M4-4" or "M4x4" trailing qty
       .trim();
     const itemLower = itemNorm.toLowerCase();
-    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0 && !/^\d+$/.test(w));
+    // Keep numeric terms — model numbers (Beta 52, Beta 91, SM58...) are often
+    // the only thing distinguishing one mic from another in the same family.
+    const allTerms = itemLower.split(/[\s\-]+/).filter((w: string) => w.length > 0);
 
     let bestMatch: any = null;
     let bestScore = 0;
